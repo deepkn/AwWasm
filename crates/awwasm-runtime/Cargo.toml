@@ -2,6 +2,20 @@
 name = "awwasm-runtime"
 version = "0.1.0"
 edition = "2021"
+description = "A safe, minimal WebAssembly runtime"
+license = "Apache-2.0"
+
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+parallel = ["rayon"]  # Optional Rayon support for parallel parsing
 
 [dependencies]
 awwasm-parser = { path = "../awwasm-parser" }
+
+# Optional dependencies
+rayon = { version = "1.8", optional = true }
+
+[dev-dependencies]
+wat = "=1.0.67"  # For compiling WAT to WASM in tests
