@@ -32,7 +32,7 @@ impl AwwasmFuncType {
 /// bytes until they are actually executed, at which point they are
 /// parsed into instructions.
 #[derive(Debug, Clone)]
-pub enum AwwasmLazyCode<'a> {
+pub enum LazyResolvedCodeRef<'a> {
     /// Raw bytes, not yet parsed.
     /// Contains the locals + instruction sequence.
     Unparsed {
@@ -79,7 +79,7 @@ pub struct AwwasmWasmFuncInst<'a> {
     /// Reference to the owning module instance.
     pub module: AwwasmModuleAddr,
     /// The function code (lazy-parsed).
-    pub code: AwwasmLazyCode<'a>,
+    pub code: LazyResolvedCodeRef<'a>,
 }
 
 /// Host function instance.
@@ -101,7 +101,7 @@ impl<'a> AwwasmFuncInst<'a> {
         AwwasmFuncInst::Wasm(AwwasmWasmFuncInst {
             type_idx,
             module,
-            code: AwwasmLazyCode::Unparsed { bytes: code_bytes },
+            code: LazyResolvedCodeRef::Unparsed { bytes: code_bytes },
         })
     }
 

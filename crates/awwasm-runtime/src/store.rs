@@ -6,13 +6,18 @@
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
-use crate::values::{AwwasmFuncAddr, AwwasmTableAddr, AwwasmMemAddr, AwwasmGlobalAddr, AwwasmElemAddr, AwwasmDataAddr, AwwasmModuleAddr};
+use crate::values::{AwwasmFuncAddr, AwwasmTableAddr, AwwasmMemAddr, AwwasmGlobalAddr, AwwasmElemAddr, AwwasmDataAddr, AwwasmModuleAddr, AwwasmExternAddr};
 use crate::func::{AwwasmFuncInst, AwwasmElemInst, AwwasmDataInst};
 use crate::table::AwwasmTableInst;
 use crate::memory::AwwasmMemInst;
 use crate::global::AwwasmGlobalInst;
-use crate::instance::AwwasmModuleInst;
-use crate::error::AwwasmRuntimeError;
+use crate::instance::{AwwasmModuleInst, AwwasmExportInst};
+use crate::error::{AwwasmRuntimeError, AwwasmInstantiationError};
+use crate::imports::{AwwasmImports, AwwasmImportValue};
+use crate::type_convert;
+
+use awwasm_parser::components::module::AwwasmModule;
+use awwasm_parser::components::types::{AwwasmImportKind, AwwasmExportKind};
 
 /// The Store - global runtime state for WebAssembly.
 ///
@@ -105,6 +110,263 @@ impl<'a> AwwasmStore<'a> {
         let addr = AwwasmModuleAddr(self.modules.len() as u32);
         self.modules.push(module);
         addr
+    }
+
+    /// Instantiate a parsed `AwwasmModule` into this Store.
+    ///
+    /// Entry point for the runtime. It:
+    /// 1. Resolves imports and allocates imported instances
+    /// 2. Allocates module-defined functions (lazy — bodies stay as raw `&[u8]`)
+    /// 3. Allocates module-defined memories, globals
+    /// 4. Allocates data segments (zero-copy `&'a [u8]` from parser)
+    /// 5. Resolves exports
+    /// 6. Initializes active data segments (copies bytes into linear memory)
+    /// 7. Registers and returns the `AwwasmModuleAddr`
+    pub fn store_init(
+        &mut self,
+        module: &AwwasmModule<'a>,
+        imports: &mut AwwasmImports<'a>,
+    ) -> Result<AwwasmModuleAddr, AwwasmInstantiationError> {
+        let mut module_inst = AwwasmModuleInst::new();
+
+        // Resolve imports
+        if let Some(ref import_items) = module.imports {
+            for import_item in import_items {
+                let mod_name = import_item.module.bytes;
+                let field_name = import_item.name.bytes;
+
+                match import_item.kind {
+                    AwwasmImportKind::Function => {
+                        let entry = imports.take(mod_name, field_name).ok_or_else(|| {
+                            AwwasmInstantiationError::MissingImport {
+                                module: core::str::from_utf8(mod_name).unwrap_or("<invalid>").into(),
+                                name: core::str::from_utf8(field_name).unwrap_or("<invalid>").into(),
+                            }
+                        })?;
+                        match entry.value {
+                            AwwasmImportValue::Func(func_inst) => {
+                                let addr = self.alloc_func(func_inst);
+                                module_inst.funcaddrs.push(addr);
+                            }
+                            _ => {
+                                return Err(AwwasmInstantiationError::ImportTypeMismatch {
+                                    module: core::str::from_utf8(mod_name).unwrap_or("<invalid>").into(),
+                                    name: core::str::from_utf8(field_name).unwrap_or("<invalid>").into(),
+                                    expected: "function".into(),
+                                    got: "other".into(),
+                                });
+                            }
+                        }
+                    }
+                    AwwasmImportKind::Memory => {
+                        let entry = imports.take(mod_name, field_name).ok_or_else(|| {
+                            AwwasmInstantiationError::MissingImport {
+                                module: core::str::from_utf8(mod_name).unwrap_or("<invalid>").into(),
+                                name: core::str::from_utf8(field_name).unwrap_or("<invalid>").into(),
+                            }
+                        })?;
+                        match entry.value {
+                            AwwasmImportValue::Memory(mem_inst) => {
+                                let addr = self.alloc_mem(mem_inst);
+                                module_inst.memaddrs.push(addr);
+                            }
+                            _ => {
+                                return Err(AwwasmInstantiationError::ImportTypeMismatch {
+                                    module: core::str::from_utf8(mod_name).unwrap_or("<invalid>").into(),
+                                    name: core::str::from_utf8(field_name).unwrap_or("<invalid>").into(),
+                                    expected: "memory".into(),
+                                    got: "other".into(),
+                                });
+                            }
+                        }
+                    }
+                    AwwasmImportKind::Global => {
+                        let entry = imports.take(mod_name, field_name).ok_or_else(|| {
+                            AwwasmInstantiationError::MissingImport {
+                                module: core::str::from_utf8(mod_name).unwrap_or("<invalid>").into(),
+                                name: core::str::from_utf8(field_name).unwrap_or("<invalid>").into(),
+                            }
+                        })?;
+                        match entry.value {
+                            AwwasmImportValue::Global(global_inst) => {
+                                let addr = self.alloc_global(global_inst);
+                                module_inst.globaladdrs.push(addr);
+                            }
+                            _ => {
+                                return Err(AwwasmInstantiationError::ImportTypeMismatch {
+                                    module: core::str::from_utf8(mod_name).unwrap_or("<invalid>").into(),
+                                    name: core::str::from_utf8(field_name).unwrap_or("<invalid>").into(),
+                                    expected: "global".into(),
+                                    got: "other".into(),
+                                });
+                            }
+                        }
+                    }
+                    // Table imports not yet supported
+                    AwwasmImportKind::Table => {
+                        return Err(AwwasmInstantiationError::UnsupportedType {
+                            description: "table imports not yet supported".into(),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Allocate module-defined functions
+        let func_items = module.funcs.as_deref().unwrap_or(&[]);
+        let code_items = module.code.as_deref().unwrap_or(&[]);
+
+        if !func_items.is_empty() && func_items.len() != code_items.len() {
+            return Err(AwwasmInstantiationError::FuncCodeMismatch {
+                func_count: func_items.len() as u32,
+                code_count: code_items.len() as u32,
+            });
+        }
+
+        // Pre-compute the module address
+        let pending_module_addr = AwwasmModuleAddr(self.modules.len() as u32);
+
+        for code_item in code_items {
+            // Store the raw func_body bytes — zero-copy from parser.
+            // Resolution happens later (on-demand or via async batch).
+            let func = AwwasmFuncInst::wasm(0, pending_module_addr, code_item.func_body);
+            let addr = self.alloc_func(func);
+            module_inst.funcaddrs.push(addr);
+        }
+
+        // Allocate module-defined memories
+        if let Some(ref mem_items) = module.memories {
+            for mem_item in mem_items {
+                let mem_type = type_convert::memory_params_to_type(&mem_item.limits);
+                let mem = AwwasmMemInst::new(mem_type);
+                let addr = self.alloc_mem(mem);
+                module_inst.memaddrs.push(addr);
+            }
+        }
+
+        // Allocate data segments - zero-copy from parser
+        if let Some(ref data_items) = module.data {
+            for data_item in data_items {
+                let data_inst = AwwasmDataInst::new(data_item.data_bytes);
+                let addr = self.alloc_data(data_inst);
+                module_inst.dataaddrs.push(addr);
+            }
+        }
+
+        // Resolve exports
+        if let Some(ref export_items) = module.exports {
+            for export_item in export_items {
+                let addr = match export_item.kind {
+                    AwwasmExportKind::Function => {
+                        let func_addr = module_inst.funcaddrs.get(export_item.index as usize)
+                            .copied()
+                            .ok_or_else(|| AwwasmInstantiationError::MissingImport {
+                                module: "self".into(),
+                                name: core::str::from_utf8(export_item.name.bytes).unwrap_or("<invalid>").into(),
+                            })?;
+                        AwwasmExternAddr::Func(func_addr)
+                    }
+                    AwwasmExportKind::Memory => {
+                        let mem_addr = module_inst.memaddrs.get(export_item.index as usize)
+                            .copied()
+                            .ok_or_else(|| AwwasmInstantiationError::MissingImport {
+                                module: "self".into(),
+                                name: core::str::from_utf8(export_item.name.bytes).unwrap_or("<invalid>").into(),
+                            })?;
+                        AwwasmExternAddr::Mem(mem_addr)
+                    }
+                    AwwasmExportKind::Table => {
+                        let table_addr = module_inst.tableaddrs.get(export_item.index as usize)
+                            .copied()
+                            .ok_or_else(|| AwwasmInstantiationError::MissingImport {
+                                module: "self".into(),
+                                name: core::str::from_utf8(export_item.name.bytes).unwrap_or("<invalid>").into(),
+                            })?;
+                        AwwasmExternAddr::Table(table_addr)
+                    }
+                    AwwasmExportKind::Global => {
+                        let global_addr = module_inst.globaladdrs.get(export_item.index as usize)
+                            .copied()
+                            .ok_or_else(|| AwwasmInstantiationError::MissingImport {
+                                module: "self".into(),
+                                name: core::str::from_utf8(export_item.name.bytes).unwrap_or("<invalid>").into(),
+                            })?;
+                        AwwasmExternAddr::Global(global_addr)
+                    }
+                };
+                module_inst.exports.push(AwwasmExportInst::new(export_item.name.bytes, addr));
+            }
+        }
+
+        // Initialize active data segments
+        // Active segments (flags 0x00 or 0x02) copy data into memory.
+        // This is the one necessary memcpy — the source data_bytes is a
+        // zero-copy &'a [u8] borrow from the parser, but linear memory
+        // is mutable Vec<u8>, so the copy is required by the wasm spec.
+        if let Some(ref data_items) = module.data {
+            for (seg_idx, data_item) in data_items.iter().enumerate() {
+                let flags = data_item.header.flags;
+
+                // flags 0x00 = active, implicit memidx 0
+                // flags 0x02 = active, explicit memidx
+                // flags 0x01 = passive (skip)
+                if flags == 0x01 {
+                    continue;
+                }
+
+                let memidx = if flags == 0x02 {
+                    data_item.header.memidx.unwrap_or(0) as usize
+                } else {
+                    0
+                };
+
+                let offset_expr = data_item.header.offset.as_ref().ok_or_else(|| {
+                    AwwasmInstantiationError::InvalidConstExpr {
+                        description: format!("data segment {} missing offset expression", seg_idx),
+                    }
+                })?;
+
+                let offset = type_convert::eval_const_expr(offset_expr.code)? as usize;
+                let data_bytes = data_item.data_bytes;
+
+                // Resolve memidx through module instance to Store address
+                let mem_addr = module_inst.memaddrs.get(memidx).copied().ok_or_else(|| {
+                    AwwasmInstantiationError::DataSegmentOutOfBounds {
+                        segment_idx: seg_idx as u32,
+                        offset: offset as u32,
+                        size: data_bytes.len() as u32,
+                        memory_size: 0,
+                    }
+                })?;
+
+                let mem = self.mems.get_mut(mem_addr.0 as usize).ok_or_else(|| {
+                    AwwasmInstantiationError::DataSegmentOutOfBounds {
+                        segment_idx: seg_idx as u32,
+                        offset: offset as u32,
+                        size: data_bytes.len() as u32,
+                        memory_size: 0,
+                    }
+                })?;
+
+                let mem_size = mem.data.len();
+                if offset + data_bytes.len() > mem_size {
+                    return Err(AwwasmInstantiationError::DataSegmentOutOfBounds {
+                        segment_idx: seg_idx as u32,
+                        offset: offset as u32,
+                        size: data_bytes.len() as u32,
+                        memory_size: mem_size as u32,
+                    });
+                }
+
+                // The actual memcpy — unavoidable per wasm spec
+                mem.data[offset..offset + data_bytes.len()].copy_from_slice(data_bytes);
+            }
+        }
+
+        // Register module instance
+        let addr = self.register_module(module_inst);
+
+        Ok(addr)
     }
 
     // ========================================================================

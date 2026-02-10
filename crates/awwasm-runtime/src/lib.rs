@@ -22,12 +22,15 @@ pub mod func;
 pub mod table;
 pub mod store;
 pub mod instance;
+pub mod type_convert;
+pub mod imports;
 
 // Re-export key types
 pub use error::{AwwasmRuntimeError, AwwasmInstantiationError, AwwasmTrap};
 pub use values::{AwwasmValue, AwwasmFuncAddr, AwwasmTableAddr, AwwasmMemAddr, AwwasmGlobalAddr, AwwasmElemAddr, AwwasmDataAddr, AwwasmExternAddr};
 pub use store::AwwasmStore;
 pub use instance::AwwasmModuleInst;
+pub use imports::AwwasmImports;
 
 #[cfg(test)]
 mod tests {
@@ -194,6 +197,164 @@ mod tests {
         
         assert_eq!(AwwasmValue::default_for_type(AwwasmValueType::I32), AwwasmValue::I32(0));
         assert_eq!(AwwasmValue::default_for_type(AwwasmValueType::F64), AwwasmValue::F64(0.0));
+    }
+
+    // store_init() integration tests
+    use awwasm_parser::components::module::AwwasmModule;
+    use crate::imports::AwwasmImports;
+    use crate::func::LazyResolvedCodeRef;
+
+    #[test]
+    fn test_instantiate_minimal_module() {
+        let wasm = wat::parse_str("(module)").unwrap();
+        let mut module = AwwasmModule::new(&wasm).unwrap();
+        // Empty module has no sections — skip resolve_all_sections
+        // (parser panics with unwrap on None sections)
+        if module.sections.is_some() {
+            module.resolve_all_sections().unwrap();
+        }
+
+        let mut store = AwwasmStore::new();
+        let mut imports = AwwasmImports::new();
+        let addr = store.store_init(&module, &mut imports).unwrap();
+
+        assert_eq!(addr.0, 0);
+        assert_eq!(store.module_count(), 1);
+        let inst = store.module(addr).unwrap();
+        assert_eq!(inst.funcaddrs.len(), 0);
+        assert_eq!(inst.memaddrs.len(), 0);
+    }
+
+    #[test]
+    fn test_instantiate_with_memory() {
+        let wasm = wat::parse_str("(module (memory 1 4))").unwrap();
+        let mut module = AwwasmModule::new(&wasm).unwrap();
+        module.resolve_all_sections().unwrap();
+
+        let mut store = AwwasmStore::new();
+        let mut imports = AwwasmImports::new();
+        let addr = store.store_init(&module, &mut imports).unwrap();
+
+        let inst = store.module(addr).unwrap();
+        assert_eq!(inst.memaddrs.len(), 1);
+        let mem = store.mem(inst.memaddrs[0]).unwrap();
+        assert_eq!(mem.data.len(), 65536);
+    }
+
+    #[test]
+    fn test_instantiate_with_function() {
+        let wasm = wat::parse_str(
+            "(module (func (result i32) (i32.const 42)))"
+        ).unwrap();
+        let mut module = AwwasmModule::new(&wasm).unwrap();
+        module.resolve_all_sections().unwrap();
+
+        let mut store = AwwasmStore::new();
+        let mut imports = AwwasmImports::new();
+        let addr = store.store_init(&module, &mut imports).unwrap();
+
+        let inst = store.module(addr).unwrap();
+        assert_eq!(inst.funcaddrs.len(), 1);
+
+        let func = store.func(inst.funcaddrs[0]).unwrap();
+        match func {
+            crate::func::AwwasmFuncInst::Wasm(wasm_func) => {
+                assert!(matches!(wasm_func.code, LazyResolvedCodeRef::Unparsed { .. }));
+            }
+            _ => panic!("expected wasm function"),
+        }
+    }
+
+    #[test]
+    fn test_instantiate_with_data_segment() {
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory 1)
+                (data (i32.const 16) "hello")
+            )
+        "#).unwrap();
+        let mut module = AwwasmModule::new(&wasm).unwrap();
+        module.resolve_all_sections().unwrap();
+
+        let mut store = AwwasmStore::new();
+        let mut imports = AwwasmImports::new();
+        let addr = store.store_init(&module, &mut imports).unwrap();
+
+        let inst = store.module(addr).unwrap();
+        let mem = store.mem(inst.memaddrs[0]).unwrap();
+
+        assert_eq!(&mem.data[16..21], b"hello");
+        assert_eq!(mem.data[15], 0);
+        assert_eq!(mem.data[21], 0);
+    }
+
+    #[test]
+    fn test_instantiate_with_exports() {
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "add") (result i32) (i32.const 0))
+            )
+        "#).unwrap();
+        let mut module = AwwasmModule::new(&wasm).unwrap();
+        module.resolve_all_sections().unwrap();
+
+        let mut store = AwwasmStore::new();
+        let mut imports = AwwasmImports::new();
+        let addr = store.store_init(&module, &mut imports).unwrap();
+
+        let inst = store.module(addr).unwrap();
+        assert_eq!(inst.exports.len(), 2);
+
+        let mem_export = inst.exports.iter().find(|e| e.name == b"memory").unwrap();
+        assert!(matches!(mem_export.addr, AwwasmExternAddr::Mem(_)));
+
+        let func_export = inst.exports.iter().find(|e| e.name == b"add").unwrap();
+        assert!(matches!(func_export.addr, AwwasmExternAddr::Func(_)));
+    }
+
+    #[test]
+    fn test_instantiate_with_imports() {
+        let wasm = wat::parse_str(r#"
+            (module
+                (import "env" "memory" (memory 1))
+            )
+        "#).unwrap();
+        let mut module = AwwasmModule::new(&wasm).unwrap();
+        module.resolve_all_sections().unwrap();
+
+        let mut store = AwwasmStore::new();
+        let mut imports = AwwasmImports::new();
+        let mem = AwwasmMemInst::new(AwwasmMemoryType::new(1, None));
+        imports.add_memory(b"env", b"memory", mem);
+
+        let addr = store.store_init(&module, &mut imports).unwrap();
+        let inst = store.module(addr).unwrap();
+        assert_eq!(inst.memaddrs.len(), 1);
+    }
+
+    #[test]
+    fn test_instantiate_import_mismatch() {
+        let wasm = wat::parse_str(r#"
+            (module
+                (import "env" "memory" (memory 1))
+            )
+        "#).unwrap();
+        let mut module = AwwasmModule::new(&wasm).unwrap();
+        module.resolve_all_sections().unwrap();
+
+        let mut store = AwwasmStore::new();
+        let mut imports = AwwasmImports::new();
+
+        let result = store.store_init(&module, &mut imports);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AwwasmInstantiationError::MissingImport { module, name } => {
+                assert_eq!(module, "env");
+                assert_eq!(name, "memory");
+            }
+            other => panic!("expected MissingImport, got {:?}", other),
+        }
     }
 }
 

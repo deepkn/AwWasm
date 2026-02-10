@@ -38,6 +38,19 @@ pub enum AwwasmInstantiationError {
     },
     /// Start function trapped
     StartFunctionTrapped(AwwasmTrap),
+    /// Unsupported type encountered during conversion
+    UnsupportedType {
+        description: String,
+    },
+    /// Invalid constant initializer expression
+    InvalidConstExpr {
+        description: String,
+    },
+    /// Function/code section count mismatch
+    FuncCodeMismatch {
+        func_count: u32,
+        code_count: u32,
+    },
 }
 
 /// Runtime trap - an unrecoverable error during execution.
