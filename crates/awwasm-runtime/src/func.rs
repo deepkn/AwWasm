@@ -76,6 +76,8 @@ pub enum AwwasmFuncInst<'a> {
 pub struct AwwasmWasmFuncInst<'a> {
     /// Index into the type section (for the function signature).
     pub type_idx: u32,
+    /// The resolved function type (params + results).
+    pub func_type: AwwasmFuncType,
     /// Reference to the owning module instance.
     pub module: AwwasmModuleAddr,
     /// The function code (lazy-parsed).
@@ -97,9 +99,10 @@ pub struct AwwasmHostFuncInst {
 
 impl<'a> AwwasmFuncInst<'a> {
     /// Create a new WebAssembly function instance.
-    pub fn wasm(type_idx: u32, module: AwwasmModuleAddr, code_bytes: &'a [u8]) -> Self {
+    pub fn wasm(type_idx: u32, func_type: AwwasmFuncType, module: AwwasmModuleAddr, code_bytes: &'a [u8]) -> Self {
         AwwasmFuncInst::Wasm(AwwasmWasmFuncInst {
             type_idx,
+            func_type,
             module,
             code: LazyResolvedCodeRef::Unparsed { bytes: code_bytes },
         })

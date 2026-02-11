@@ -24,6 +24,7 @@ pub mod store;
 pub mod instance;
 pub mod type_convert;
 pub mod imports;
+pub mod engine;
 
 // Re-export key types
 pub use error::{AwwasmRuntimeError, AwwasmInstantiationError, AwwasmTrap};
@@ -31,6 +32,7 @@ pub use values::{AwwasmValue, AwwasmFuncAddr, AwwasmTableAddr, AwwasmMemAddr, Aw
 pub use store::AwwasmStore;
 pub use instance::AwwasmModuleInst;
 pub use imports::AwwasmImports;
+pub use engine::AwwasmThread;
 
 #[cfg(test)]
 mod tests {
@@ -38,7 +40,7 @@ mod tests {
     use memory::{AwwasmMemInst, AwwasmMemoryType};
     use table::{AwwasmTableInst, AwwasmTableType};
     use global::{AwwasmGlobalInst, AwwasmGlobalType};
-    use func::{AwwasmFuncInst, AwwasmDataInst};
+    use func::{AwwasmFuncInst, AwwasmFuncType, AwwasmDataInst};
     use values::{AwwasmValueType, AwwasmModuleAddr};
 
     #[test]
@@ -148,7 +150,7 @@ mod tests {
         
         // Create a wasm function
         let code: &[u8] = &[0x00, 0x0b]; // empty function body
-        let func = AwwasmFuncInst::wasm(0, AwwasmModuleAddr(0), code);
+        let func = AwwasmFuncInst::wasm(0, AwwasmFuncType::new(vec![], vec![]), AwwasmModuleAddr(0), code);
         let addr = store.alloc_func(func);
         
         assert_eq!(store.func_count(), 1);
