@@ -1,0 +1,10 @@
+[package]
+name = "awwasm-spectests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+awwasm-runtime = { path = "../awwasm-runtime" }
+awwasm-parser = { path = "../awwasm-parser" }
+wast = "=61.0.0"
