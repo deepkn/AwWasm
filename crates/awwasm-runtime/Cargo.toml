@@ -10,6 +10,7 @@ default = ["std"]
 std = ["alloc"]
 alloc = []
 parallel = ["rayon"]  # Optional Rayon support for parallel parsing
+tail_calls = []       # Enable explicit tail calls (Rust Nightly `become` keyword)
 
 [dependencies]
 awwasm-parser = { path = "../awwasm-parser" }

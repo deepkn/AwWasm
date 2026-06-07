@@ -224,34 +224,30 @@ impl<'a> AwwasmStore<'a> {
             });
         }
 
+        // Build type table once — M entries, one per distinct type in the type section.
+        module_inst.types = type_items.iter().map(|type_item| {
+            let params: Vec<_> = type_item.fn_args.iter()
+                .filter_map(|pt| type_convert::param_type_to_value_type(pt).ok())
+                .collect();
+            let results: Vec<_> = type_item.fn_rets.iter()
+                .filter_map(|pt| type_convert::param_type_to_value_type(pt).ok())
+                .collect();
+            AwwasmFuncType::new(params, results)
+        }).collect();
+
         // Pre-compute the module address
         let pending_module_addr = AwwasmModuleAddr(self.modules.len() as u32);
 
         for (i, code_item) in code_items.iter().enumerate() {
-            // Get the type index from the function section
             let type_idx = if i < func_items.len() {
                 func_items[i].type_item_idx
             } else {
                 0
             };
 
-            // Build AwwasmFuncType from the type section
-            let func_type = if (type_idx as usize) < type_items.len() {
-                let type_item = &type_items[type_idx as usize];
-                let params: Vec<_> = type_item.fn_args.iter()
-                    .filter_map(|pt| type_convert::param_type_to_value_type(pt).ok())
-                    .collect();
-                let results: Vec<_> = type_item.fn_rets.iter()
-                    .filter_map(|pt| type_convert::param_type_to_value_type(pt).ok())
-                    .collect();
-                AwwasmFuncType::new(params, results)
-            } else {
-                AwwasmFuncType::new(vec![], vec![])
-            };
-
             // Store the raw func_body bytes — zero-copy from parser.
             // Resolution happens later (on-demand or via async batch).
-            let func = AwwasmFuncInst::wasm(type_idx, func_type, pending_module_addr, code_item.func_body);
+            let func = AwwasmFuncInst::wasm(type_idx, pending_module_addr, code_item.func_body);
             let addr = self.alloc_func(func);
             module_inst.funcaddrs.push(addr);
         }

@@ -9,6 +9,7 @@
 //! - `alloc`: Enable heap allocation without full std
 //! - `parallel`: Enable Rayon-based parallel parsing (future)
 
+#![cfg_attr(feature = "tail_calls", feature(explicit_tail_calls))]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "alloc")]
@@ -40,7 +41,7 @@ mod tests {
     use memory::{AwwasmMemInst, AwwasmMemoryType};
     use table::{AwwasmTableInst, AwwasmTableType};
     use global::{AwwasmGlobalInst, AwwasmGlobalType};
-    use func::{AwwasmFuncInst, AwwasmFuncType, AwwasmDataInst};
+    use func::{AwwasmFuncInst, AwwasmDataInst};
     use values::{AwwasmValueType, AwwasmModuleAddr};
 
     #[test]
@@ -150,7 +151,7 @@ mod tests {
         
         // Create a wasm function
         let code: &[u8] = &[0x00, 0x0b]; // empty function body
-        let func = AwwasmFuncInst::wasm(0, AwwasmFuncType::new(vec![], vec![]), AwwasmModuleAddr(0), code);
+        let func = AwwasmFuncInst::wasm(0, AwwasmModuleAddr(0), code);
         let addr = store.alloc_func(func);
         
         assert_eq!(store.func_count(), 1);

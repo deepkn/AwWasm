@@ -5,10 +5,13 @@
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
+#[cfg(feature = "alloc")]
+use alloc::rc::Rc;
 
 use core::marker::PhantomData;
 
 use crate::values::AwwasmModuleAddr;
+use awwasm_parser::components::instructions::AwwasmInstruction;
 
 /// Function type signature.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,23 +33,22 @@ impl AwwasmFuncType {
 ///
 /// This enum enables lazy parsing: function bodies are stored as raw
 /// bytes until they are actually executed, at which point they are
-/// parsed into instructions.
+/// parsed once into a cached instruction Vec.
 #[derive(Debug, Clone)]
 pub enum LazyResolvedCodeRef<'a> {
     /// Raw bytes, not yet parsed.
-    /// Contains the locals + instruction sequence.
     Unparsed {
         /// Raw function body bytes (from parsed module).
         bytes: &'a [u8],
     },
-    /// Parsed locals and code bytes ready for interpretation.
-    /// Note: We keep code as bytes for the interpreter to use
-    /// with InstructionIterator for streaming execution.
-    Resolved {
+    /// Fully parsed — locals declared and all instructions pre-parsed into a shared Vec.
+    /// The Rc allows execution to hold a reference independent of the store borrow,
+    /// enabling &mut self calls during dispatch while instructions remain accessible.
+    FullyParsed {
         /// Local variable declarations (count, type).
         locals: Vec<AwwasmLocalDecl>,
-        /// Code bytes (instruction sequence).
-        code: &'a [u8],
+        /// Pre-parsed instruction sequence (includes nested block/loop/if bodies).
+        instrs: Rc<Vec<AwwasmInstruction<'a>>>,
     },
 }
 
@@ -76,8 +78,6 @@ pub enum AwwasmFuncInst<'a> {
 pub struct AwwasmWasmFuncInst<'a> {
     /// Index into the type section (for the function signature).
     pub type_idx: u32,
-    /// The resolved function type (params + results).
-    pub func_type: AwwasmFuncType,
     /// Reference to the owning module instance.
     pub module: AwwasmModuleAddr,
     /// The function code (lazy-parsed).
@@ -99,10 +99,9 @@ pub struct AwwasmHostFuncInst {
 
 impl<'a> AwwasmFuncInst<'a> {
     /// Create a new WebAssembly function instance.
-    pub fn wasm(type_idx: u32, func_type: AwwasmFuncType, module: AwwasmModuleAddr, code_bytes: &'a [u8]) -> Self {
+    pub fn wasm(type_idx: u32, module: AwwasmModuleAddr, code_bytes: &'a [u8]) -> Self {
         AwwasmFuncInst::Wasm(AwwasmWasmFuncInst {
             type_idx,
-            func_type,
             module,
             code: LazyResolvedCodeRef::Unparsed { bytes: code_bytes },
         })

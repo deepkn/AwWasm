@@ -1,11 +1,87 @@
-//! Execution engine — stack-based WebAssembly interpreter.
-//!
-//! `AwwasmThread` is the entry point: create one, call `invoke()`,
-//! get results back. Internally it uses the parser's `InstructionIterator`
-//! to stream instructions from resolved function bodies.
+// ============================================================================
+// Instruction Stream Abstraction
+// ============================================================================
+
+pub trait InstrSource<'a> {
+    // Takes &self (via Cell interior mutability) so multiple shared borrows can coexist:
+    // `instr` from one next_instr call and `&source` passed to dispatch_tail are both
+    // shared borrows — the borrow checker allows them simultaneously.
+    fn next_instr(&self) -> Option<&AwwasmInstruction<'a>>;
+}
+
+pub struct SliceInstrSource<'a, 'c> {
+    slice: &'c [AwwasmInstruction<'a>],
+    idx: core::cell::Cell<usize>,
+}
+
+impl<'a, 'c> SliceInstrSource<'a, 'c> {
+    pub fn new(slice: &'c [AwwasmInstruction<'a>]) -> Self {
+        Self { slice, idx: core::cell::Cell::new(0) }
+    }
+}
+
+impl<'a, 'c> InstrSource<'a> for SliceInstrSource<'a, 'c> {
+    #[inline]
+    fn next_instr(&self) -> Option<&AwwasmInstruction<'a>> {
+        let i = self.idx.get();
+        if let Some(instr) = self.slice.get(i) {
+            self.idx.set(i + 1);
+            Some(instr)
+        } else {
+            None
+        }
+    }
+}
+
+// ============================================================================
+// Tail-Call Dispatch Macros
+// ============================================================================
+
+#[cfg(feature = "tail_calls")]
+macro_rules! dispatch_next {
+    ($thread:expr, $source:expr, $frame_idx:expr) => {
+        if let Some(next_instr) = $source.next_instr() {
+            become $thread.dispatch_tail(next_instr, $source, $frame_idx)
+        } else {
+            Ok(ControlSignal::None)
+        }
+    }
+}
+
+#[cfg(not(feature = "tail_calls"))]
+macro_rules! dispatch_next {
+    ($thread:expr, $source:expr, $frame_idx:expr) => {{
+        // Touch args so the compiler doesn't warn about them being unused
+        // on stable (where the trampoline loop drives iteration instead).
+        let _ = ($source, $frame_idx);
+        Ok(ControlSignal::None)
+    }}
+}
+
+#[cfg(feature = "tail_calls")]
+macro_rules! handle_op {
+    ($op_func:ident, $thread:expr, $source:expr, $frame_idx:expr $(, $arg:expr)*) => {{
+        become $thread.$op_func($source, $frame_idx $(, $arg)*)
+    }}
+}
+
+#[cfg(not(feature = "tail_calls"))]
+macro_rules! handle_op {
+    ($op_func:ident, $thread:expr, $source:expr, $frame_idx:expr $(, $arg:expr)*) => {{
+        $thread.$op_func($source, $frame_idx $(, $arg)*)
+    }}
+}
+
+// Execution engine — stack-based WebAssembly interpreter.
+//
+// `AwwasmThread` is the entry point: create one, call `invoke()`,
+// get results back. Internally it uses the parser's `InstructionIterator`
+// to stream instructions from resolved function bodies.
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
+#[cfg(feature = "alloc")]
+use alloc::rc::Rc;
 
 use crate::error::{AwwasmRuntimeError, AwwasmTrap};
 use crate::func::{AwwasmFuncInst, LazyResolvedCodeRef};
@@ -47,8 +123,10 @@ struct CallFrame {
     func_addr: AwwasmFuncAddr,
     /// The owning module instance (for resolving locals funcidx → store addr).
     module_addr: AwwasmModuleAddr,
-    /// Local variables (params filled from stack, then zero-initialized locals).
-    locals: Vec<AwwasmValue>,
+    /// Start index of this frame's locals in `AwwasmThread::locals_pool`.
+    locals_start: usize,
+    /// Number of local variable slots (params + declared locals) for this frame.
+    locals_count: usize,
     /// Value-stack height at frame entry (for result truncation on return).
     stack_height: usize,
     /// Number of results this function produces.
@@ -67,6 +145,10 @@ pub struct AwwasmThread<'a, 'b> {
     stack: Vec<AwwasmValue>,
     /// Call stack (activation frames).
     call_stack: Vec<CallFrame>,
+    /// Flat pool for all active frames' local variables — avoids per-call heap allocation.
+    /// Each `CallFrame` stores a (locals_start, locals_count) range into this Vec.
+    /// On frame entry, locals are appended; on frame exit, the Vec is truncated.
+    locals_pool: Vec<AwwasmValue>,
     /// The Store.
     store: &'b mut AwwasmStore<'a>,
     /// Max call depth.
@@ -79,6 +161,7 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
         Self {
             stack: Vec::with_capacity(256),
             call_stack: Vec::with_capacity(64),
+            locals_pool: Vec::with_capacity(256),
             store,
             max_call_depth: DEFAULT_MAX_CALL_DEPTH,
         }
@@ -103,8 +186,9 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
         // Run the main loop
         self.run_loop()?;
 
-        // Collect results
+        // Collect results and release the top frame's locals
         let frame = self.call_stack.pop().unwrap();
+        self.locals_pool.truncate(frame.locals_start);
         let results: Vec<AwwasmValue> = self.stack.drain(frame.stack_height..).collect();
         Ok(results)
     }
@@ -123,72 +207,45 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
             let frame_idx = self.call_stack.len() - 1;
             let func_addr = self.call_stack[frame_idx].func_addr;
 
-            // Ensure function body is resolved
-            self.ensure_resolved(func_addr)?;
+            // Ensure function body is fully parsed (no-op after first call)
+            self.ensure_fully_parsed(func_addr)?;
 
-            // Get the code bytes
-            let func = self.store.func(func_addr)?;
-            match func {
-                AwwasmFuncInst::Wasm(wasm) => {
-                    match &wasm.code {
-                        LazyResolvedCodeRef::Resolved { code, .. } => {
-                            // Execute instructions via iterator
-                            let mut iter = InstructionIterator::new(code);
-                            let signal = self.execute_instructions_iter(&mut iter, frame_idx)?;
-
-                            match signal {
-                                ControlSignal::Return | ControlSignal::None => {
-                                    // Function returned — pop frame
-                                    if self.call_stack.len() == 1 {
-                                        // Last frame — we're done
-                                        return Ok(());
-                                    }
-                                    let frame = self.call_stack.pop().unwrap();
-                                    self.stack.truncate(frame.stack_height + frame.arity as usize);
-                                }
-                                ControlSignal::Branch(_) => {
-                                    // Should not happen at function level
-                                    return Err(AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable));
-                                }
-                            }
-                        }
+            // Clone the Rc to get an independent reference to the instructions,
+            // then drop the store borrow so &mut self methods can be called during dispatch.
+            let instrs_rc = {
+                let func = self.store.func(func_addr)?;
+                match func {
+                    AwwasmFuncInst::Wasm(wasm) => match &wasm.code {
+                        LazyResolvedCodeRef::FullyParsed { instrs, .. } => Rc::clone(instrs),
                         LazyResolvedCodeRef::Unparsed { .. } => {
                             return Err(AwwasmRuntimeError::FunctionNotParsed);
                         }
                     }
+                    AwwasmFuncInst::Host(_) => {
+                        return Err(AwwasmRuntimeError::HostFunctionNotExecutable);
+                    }
                 }
-                AwwasmFuncInst::Host(_) => {
-                    return Err(AwwasmRuntimeError::HostFunctionNotExecutable);
-                }
-            }
-        }
-    }
+            };
+            let signal = self.execute_instructions_vec(&instrs_rc, frame_idx)?;
 
-    // ========================================================================
-    // Instruction dispatch (from iterator — top-level function body)
-    // ========================================================================
-
-    fn execute_instructions_iter(
-        &mut self,
-        iter: &mut InstructionIterator<'a>,
-        frame_idx: usize,
-    ) -> Result<ControlSignal, AwwasmRuntimeError> {
-        while let Some(result) = iter.next() {
-            let instr = result.map_err(|e| {
-                AwwasmRuntimeError::InstructionParseError(format!("{}", e))
-            })?;
-
-            let signal = self.dispatch(&instr, frame_idx)?;
             match signal {
-                ControlSignal::None => {}
-                other => return Ok(other),
+                ControlSignal::Return | ControlSignal::None => {
+                    if self.call_stack.len() == 1 {
+                        return Ok(());
+                    }
+                    let frame = self.call_stack.pop().unwrap();
+                    self.locals_pool.truncate(frame.locals_start);
+                    self.stack.truncate(frame.stack_height + frame.arity as usize);
+                }
+                ControlSignal::Branch(_) => {
+                    return Err(AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable));
+                }
             }
         }
-        Ok(ControlSignal::None)
     }
 
     // ========================================================================
-    // Instruction dispatch (from pre-parsed vec — block/loop/if bodies)
+    // Instruction dispatch (from cached instruction Vec)
     // ========================================================================
 
     fn execute_instructions_vec(
@@ -196,8 +253,9 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
         instrs: &[AwwasmInstruction<'a>],
         frame_idx: usize,
     ) -> Result<ControlSignal, AwwasmRuntimeError> {
-        for instr in instrs {
-            let signal = self.dispatch(instr, frame_idx)?;
+        let source = SliceInstrSource::new(instrs);
+        while let Some(instr) = source.next_instr() {
+            let signal = self.dispatch_tail(instr, &source, frame_idx)?;
             match signal {
                 ControlSignal::None => {}
                 other => return Ok(other),
@@ -205,321 +263,544 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
         }
         Ok(ControlSignal::None)
     }
-
     // ========================================================================
     // Single instruction dispatch
     // ========================================================================
 
-    fn dispatch(
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn dispatch_tail<S: InstrSource<'a>>(
         &mut self,
         instr: &AwwasmInstruction<'a>,
+        source: &S,
         frame_idx: usize,
     ) -> Result<ControlSignal, AwwasmRuntimeError> {
         match &instr.operands {
-            // ==============================================================
-            // Constants
-            // ==============================================================
-            AwwasmOperands::I32Const(op) => {
-                self.stack.push(AwwasmValue::I32(op.value));
-            }
-            AwwasmOperands::I64Const(op) => {
-                self.stack.push(AwwasmValue::I64(op.value));
-            }
-            AwwasmOperands::F32Const(op) => {
-                self.stack.push(AwwasmValue::F32(op.value));
-            }
-            AwwasmOperands::F64Const(op) => {
-                self.stack.push(AwwasmValue::F64(op.value));
-            }
+            AwwasmOperands::I32Const(op) => handle_op!(op_i32_const, self, source, frame_idx, op),
+            AwwasmOperands::I64Const(op) => handle_op!(op_i64_const, self, source, frame_idx, op),
+            AwwasmOperands::F32Const(op) => handle_op!(op_f32_const, self, source, frame_idx, op),
+            AwwasmOperands::F64Const(op) => handle_op!(op_f64_const, self, source, frame_idx, op),
+            AwwasmOperands::I32Add => handle_op!(op_i32_add, self, source, frame_idx),
+            AwwasmOperands::I32Sub => handle_op!(op_i32_sub, self, source, frame_idx),
+            AwwasmOperands::I32Mul => handle_op!(op_i32_mul, self, source, frame_idx),
+            AwwasmOperands::I32Eqz => handle_op!(op_i32_eqz, self, source, frame_idx),
+            AwwasmOperands::I32Eq => handle_op!(op_i32_eq, self, source, frame_idx),
+            AwwasmOperands::I32Ne => handle_op!(op_i32_ne, self, source, frame_idx),
+            AwwasmOperands::LocalGet(op) => handle_op!(op_local_get, self, source, frame_idx, op),
+            AwwasmOperands::LocalSet(op) => handle_op!(op_local_set, self, source, frame_idx, op),
+            AwwasmOperands::LocalTee(op) => handle_op!(op_local_tee, self, source, frame_idx, op),
+            AwwasmOperands::GlobalGet(op) => handle_op!(op_global_get, self, source, frame_idx, op),
+            AwwasmOperands::GlobalSet(op) => handle_op!(op_global_set, self, source, frame_idx, op),
+            AwwasmOperands::I32Load(op) => handle_op!(op_i32_load, self, source, frame_idx, op),
+            AwwasmOperands::I64Load(op) => handle_op!(op_i64_load, self, source, frame_idx, op),
+            AwwasmOperands::I32Store(op) => handle_op!(op_i32_store, self, source, frame_idx, op),
+            AwwasmOperands::I64Store(op) => handle_op!(op_i64_store, self, source, frame_idx, op),
+            AwwasmOperands::MemorySize(op) => handle_op!(op_memory_size, self, source, frame_idx, op),
+            AwwasmOperands::MemoryGrow(op) => handle_op!(op_memory_grow, self, source, frame_idx, op),
+            AwwasmOperands::Call(op) => handle_op!(op_call, self, source, frame_idx, op),
+            AwwasmOperands::Block(op) => handle_op!(op_block, self, source, frame_idx, op),
+            AwwasmOperands::Loop(op) => handle_op!(op_loop, self, source, frame_idx, op),
+            AwwasmOperands::If(op) => handle_op!(op_if, self, source, frame_idx, op),
+            AwwasmOperands::Br(op) => handle_op!(op_br, self, source, frame_idx, op),
+            AwwasmOperands::BrIf(op) => handle_op!(op_br_if, self, source, frame_idx, op),
+            AwwasmOperands::BrTable(op) => handle_op!(op_br_table, self, source, frame_idx, op),
+            AwwasmOperands::Return => handle_op!(op_return, self, source, frame_idx),
+            AwwasmOperands::CallIndirect(op) => handle_op!(op_call_indirect, self, source, frame_idx, op),
+            AwwasmOperands::End => handle_op!(op_end, self, source, frame_idx),
+            AwwasmOperands::Else => handle_op!(op_else, self, source, frame_idx),
+            AwwasmOperands::Unreachable => handle_op!(op_unreachable, self, source, frame_idx),
+            AwwasmOperands::Nop => handle_op!(op_nop, self, source, frame_idx),
+            AwwasmOperands::Drop => handle_op!(op_drop, self, source, frame_idx),
+            AwwasmOperands::Select => handle_op!(op_select, self, source, frame_idx),
 
-            // ==============================================================
-            // Arithmetic (i32)
-            // ==============================================================
-            AwwasmOperands::I32Add => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(AwwasmValue::I32(a.wrapping_add(b)));
-            }
-            AwwasmOperands::I32Sub => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(AwwasmValue::I32(a.wrapping_sub(b)));
-            }
-            AwwasmOperands::I32Mul => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(AwwasmValue::I32(a.wrapping_mul(b)));
-            }
+        }
+    }
 
-            // ==============================================================
-            // Comparison (i32)
-            // ==============================================================
-            AwwasmOperands::I32Eqz => {
-                let v = self.pop_i32()?;
-                self.stack.push(AwwasmValue::I32(if v == 0 { 1 } else { 0 }));
-            }
-            AwwasmOperands::I32Eq => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(AwwasmValue::I32(if a == b { 1 } else { 0 }));
-            }
-            AwwasmOperands::I32Ne => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(AwwasmValue::I32(if a != b { 1 } else { 0 }));
-            }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_const<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::I32ConstOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        self.stack.push(AwwasmValue::I32(op.value));
+        dispatch_next!(self, source, frame_idx)
+    }
 
-            // ==============================================================
-            // Local variables
-            // ==============================================================
-            AwwasmOperands::LocalGet(op) => {
-                let val = self.call_stack[frame_idx].locals
-                    .get(op.index as usize)
-                    .copied()
-                    .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
-                self.stack.push(val);
-            }
-            AwwasmOperands::LocalSet(op) => {
-                let val = self.pop()?;
-                let local = self.call_stack[frame_idx].locals
-                    .get_mut(op.index as usize)
-                    .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
-                *local = val;
-            }
-            AwwasmOperands::LocalTee(op) => {
-                let val = *self.stack.last()
-                    .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::StackOverflow))?;
-                let local = self.call_stack[frame_idx].locals
-                    .get_mut(op.index as usize)
-                    .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
-                *local = val;
-            }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_const<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::I64ConstOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        self.stack.push(AwwasmValue::I64(op.value));
+        dispatch_next!(self, source, frame_idx)
+    }
 
-            // ==============================================================
-            // Global variables
-            // ==============================================================
-            AwwasmOperands::GlobalGet(op) => {
-                let module_addr = self.call_stack[frame_idx].module_addr;
-                let module_inst = self.store.module(module_addr)
-                    .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
-                let global_addr = module_inst.global(op.index)
-                    .ok_or_else(|| AwwasmRuntimeError::InvalidGlobalAddr(op.index))?;
-                let global = self.store.global(global_addr)?;
-                self.stack.push(global.get());
-            }
-            AwwasmOperands::GlobalSet(op) => {
-                let val = self.pop()?;
-                let module_addr = self.call_stack[frame_idx].module_addr;
-                let module_inst = self.store.module(module_addr)
-                    .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
-                let global_addr = module_inst.global(op.index)
-                    .ok_or_else(|| AwwasmRuntimeError::InvalidGlobalAddr(op.index))?;
-                let global = self.store.global_mut(global_addr)?;
-                global.set(val).map_err(|_| AwwasmRuntimeError::ImmutableGlobal(op.index))?;
-            }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_const<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::F32ConstOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        self.stack.push(AwwasmValue::F32(op.value));
+        dispatch_next!(self, source, frame_idx)
+    }
 
-            // ==============================================================
-            // Memory operations
-            // ==============================================================
-            AwwasmOperands::I32Load(memarg) => {
-                let base = self.pop_i32()? as u32;
-                let addr = base.wrapping_add(memarg.offset);
-                let mem_addr = self.resolve_mem(frame_idx, 0)?;
-                let mem = self.store.mem(mem_addr)?;
-                let val = mem.read_i32(addr)?;
-                self.stack.push(AwwasmValue::I32(val));
-            }
-            AwwasmOperands::I64Load(memarg) => {
-                let base = self.pop_i32()? as u32;
-                let addr = base.wrapping_add(memarg.offset);
-                let mem_addr = self.resolve_mem(frame_idx, 0)?;
-                let mem = self.store.mem(mem_addr)?;
-                let val = mem.read_i64(addr)?;
-                self.stack.push(AwwasmValue::I64(val));
-            }
-            AwwasmOperands::I32Store(memarg) => {
-                let val = self.pop_i32()?;
-                let base = self.pop_i32()? as u32;
-                let addr = base.wrapping_add(memarg.offset);
-                let mem_addr = self.resolve_mem(frame_idx, 0)?;
-                let mem = self.store.mem_mut(mem_addr)?;
-                mem.write_i32(addr, val)?;
-            }
-            AwwasmOperands::I64Store(memarg) => {
-                let val = self.pop_i64()?;
-                let base = self.pop_i32()? as u32;
-                let addr = base.wrapping_add(memarg.offset);
-                let mem_addr = self.resolve_mem(frame_idx, 0)?;
-                let mem = self.store.mem_mut(mem_addr)?;
-                mem.write_i64(addr, val)?;
-            }
-            AwwasmOperands::MemorySize(_) => {
-                let mem_addr = self.resolve_mem(frame_idx, 0)?;
-                let mem = self.store.mem(mem_addr)?;
-                self.stack.push(AwwasmValue::I32(mem.size_pages() as i32));
-            }
-            AwwasmOperands::MemoryGrow(_) => {
-                let delta = self.pop_i32()? as u32;
-                let mem_addr = self.resolve_mem(frame_idx, 0)?;
-                let mem = self.store.mem_mut(mem_addr)?;
-                let result = mem.grow(delta).map(|old| old as i32).unwrap_or(-1);
-                self.stack.push(AwwasmValue::I32(result));
-            }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_const<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::F64ConstOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        self.stack.push(AwwasmValue::F64(op.value));
+        dispatch_next!(self, source, frame_idx)
+    }
 
-            // ==============================================================
-            // Control flow — call
-            // ==============================================================
-            AwwasmOperands::Call(op) => {
-                let target_func_addr = self.resolve_funcidx(frame_idx, op.funcidx)?;
-                self.enter_function(target_func_addr)?;
-                // Run the callee to completion in the main loop
-                self.run_callee()?;
-            }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_add<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?;
+        let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(a.wrapping_add(b)));
+        dispatch_next!(self, source, frame_idx)
+    }
 
-            // ==============================================================
-            // Control flow — block
-            // ==============================================================
-            AwwasmOperands::Block(block_op) => {
-                let arity = block_arity(&block_op.block_type);
-                let saved_height = self.stack.len();
-                let signal = self.execute_instructions_vec(&block_op.body.0, frame_idx)?;
-                match signal {
-                    ControlSignal::Branch(0) => {
-                        // Branch to this block's end — truncate stack to saved + arity
-                        self.truncate_stack(saved_height, arity);
-                    }
-                    ControlSignal::Branch(n) => {
-                        return Ok(ControlSignal::Branch(n - 1));
-                    }
-                    ControlSignal::Return => return Ok(ControlSignal::Return),
-                    ControlSignal::None => {}
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_sub<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?;
+        let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(a.wrapping_sub(b)));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_mul<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?;
+        let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(a.wrapping_mul(b)));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_eqz<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(if v == 0 { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_eq<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?;
+        let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(if a == b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_ne<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?;
+        let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(if a != b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_local_get<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::IndexOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let locals_start = self.call_stack[frame_idx].locals_start;
+        let val = self.locals_pool
+            .get(locals_start + op.index as usize)
+            .copied()
+            .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
+        self.stack.push(val);
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_local_set<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::IndexOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop()?;
+        let locals_start = self.call_stack[frame_idx].locals_start;
+        let local = self.locals_pool
+            .get_mut(locals_start + op.index as usize)
+            .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
+        *local = val;
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_local_tee<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::IndexOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = *self.stack.last()
+            .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::StackOverflow))?;
+        let locals_start = self.call_stack[frame_idx].locals_start;
+        let local = self.locals_pool
+            .get_mut(locals_start + op.index as usize)
+            .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
+        *local = val;
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_global_get<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::IndexOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let module_addr = self.call_stack[frame_idx].module_addr;
+        let module_inst = self.store.module(module_addr)
+            .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
+        let global_addr = module_inst.global(op.index)
+            .ok_or_else(|| AwwasmRuntimeError::InvalidGlobalAddr(op.index))?;
+        let global = self.store.global(global_addr)?;
+        self.stack.push(global.get());
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_global_set<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::IndexOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop()?;
+        let module_addr = self.call_stack[frame_idx].module_addr;
+        let module_inst = self.store.module(module_addr)
+            .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
+        let global_addr = module_inst.global(op.index)
+            .ok_or_else(|| AwwasmRuntimeError::InvalidGlobalAddr(op.index))?;
+        let global = self.store.global_mut(global_addr)?;
+        global.set(val).map_err(|_| AwwasmRuntimeError::ImmutableGlobal(op.index))?;
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_load<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = base.wrapping_add(op.offset);
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let mem = self.store.mem(mem_addr)?;
+        let val = mem.read_i32(addr)?;
+        self.stack.push(AwwasmValue::I32(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_load<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = base.wrapping_add(op.offset);
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let mem = self.store.mem(mem_addr)?;
+        let val = mem.read_i64(addr)?;
+        self.stack.push(AwwasmValue::I64(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_store<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop_i32()?;
+        let base = self.pop_i32()? as u32;
+        let addr = base.wrapping_add(op.offset);
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let mem = self.store.mem_mut(mem_addr)?;
+        mem.write_i32(addr, val)?;
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_store<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop_i64()?;
+        let base = self.pop_i32()? as u32;
+        let addr = base.wrapping_add(op.offset);
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let mem = self.store.mem_mut(mem_addr)?;
+        mem.write_i64(addr, val)?;
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_memory_size<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, _op: &awwasm_parser::components::instructions::MemoryZeroOperands<'a>
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let mem = self.store.mem(mem_addr)?;
+        self.stack.push(AwwasmValue::I32(mem.size_pages() as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_memory_grow<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, _op: &awwasm_parser::components::instructions::MemoryZeroOperands<'a>
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let delta = self.pop_i32()? as u32;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let mem = self.store.mem_mut(mem_addr)?;
+        let result = mem.grow(delta).map(|old| old as i32).unwrap_or(-1);
+        self.stack.push(AwwasmValue::I32(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_call<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::CallOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let target_func_addr = self.resolve_funcidx(frame_idx, op.funcidx)?;
+        self.enter_function(target_func_addr)?;
+        // Run the callee to completion in the main loop
+        self.run_callee()?;
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_block<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::BlockOperands<'a>
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let arity = block_arity(&op.block_type);
+        let saved_height = self.stack.len();
+        let signal = self.execute_instructions_vec(&op.body.0, frame_idx)?;
+        match signal {
+            ControlSignal::Branch(0) => {
+                // Branch to this block's end — truncate stack to saved + arity
+                self.truncate_stack(saved_height, arity);
+            }
+            ControlSignal::Branch(n) => {
+                return Ok(ControlSignal::Branch(n - 1));
+            }
+            ControlSignal::Return => return Ok(ControlSignal::Return),
+            ControlSignal::None => {}
+        }
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_loop<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::LoopOperands<'a>
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        loop {
+            let saved_height = self.stack.len();
+            let signal = self.execute_instructions_vec(&op.body.0, frame_idx)?;
+            match signal {
+                ControlSignal::Branch(0) => {
+                    // Branch to this loop's start (continue)
+                    self.stack.truncate(saved_height);
+                    continue;
                 }
-            }
-
-            // ==============================================================
-            // Control flow — loop
-            // ==============================================================
-            AwwasmOperands::Loop(loop_op) => {
-                // In a loop, `br 0` jumps back to the loop start
-                loop {
-                    let saved_height = self.stack.len();
-                    let signal = self.execute_instructions_vec(&loop_op.body.0, frame_idx)?;
-                    match signal {
-                        ControlSignal::Branch(0) => {
-                            // Branch back to loop start — discard results, restart
-                            self.stack.truncate(saved_height);
-                            continue;
-                        }
-                        ControlSignal::Branch(n) => {
-                            return Ok(ControlSignal::Branch(n - 1));
-                        }
-                        ControlSignal::Return => return Ok(ControlSignal::Return),
-                        ControlSignal::None => break,
-                    }
+                ControlSignal::Branch(n) => {
+                    return Ok(ControlSignal::Branch(n - 1));
                 }
+                ControlSignal::Return => return Ok(ControlSignal::Return),
+                ControlSignal::None => break,
             }
+        }
+        dispatch_next!(self, source, frame_idx)
+    }
 
-            // ==============================================================
-            // Control flow — if/else
-            // ==============================================================
-            AwwasmOperands::If(if_op) => {
-                let cond = self.pop_i32()?;
-                let arity = block_arity(&if_op.block_type);
-                let saved_height = self.stack.len();
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_if<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::IfOperands<'a>
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let cond = self.pop_i32()?;
+        let arity = block_arity(&op.block_type);
+        let saved_height = self.stack.len();
 
-                let signal = if cond != 0 {
-                    self.execute_instructions_vec(&if_op.then_body.0, frame_idx)?
-                } else if let Some(ref else_body) = if_op.else_body {
-                    self.execute_instructions_vec(&else_body.0, frame_idx)?
-                } else {
-                    ControlSignal::None
-                };
+        let signal = if cond != 0 {
+            self.execute_instructions_vec(&op.then_body.0, frame_idx)?
+        } else if let Some(ref else_body) = op.else_body {
+            self.execute_instructions_vec(&else_body.0, frame_idx)?
+        } else {
+            ControlSignal::None
+        };
 
-                match signal {
-                    ControlSignal::Branch(0) => {
-                        self.truncate_stack(saved_height, arity);
-                    }
-                    ControlSignal::Branch(n) => {
-                        return Ok(ControlSignal::Branch(n - 1));
-                    }
-                    ControlSignal::Return => return Ok(ControlSignal::Return),
-                    ControlSignal::None => {}
-                }
+        match signal {
+            ControlSignal::Branch(0) => {
+                self.truncate_stack(saved_height, arity);
             }
+            ControlSignal::Branch(n) => {
+                return Ok(ControlSignal::Branch(n - 1));
+            }
+            ControlSignal::Return => return Ok(ControlSignal::Return),
+            ControlSignal::None => {}
+        }
+        dispatch_next!(self, source, frame_idx)
+    }
 
-            // ==============================================================
-            // Control flow — branches
-            // ==============================================================
-            AwwasmOperands::Br(op) => {
-                return Ok(ControlSignal::Branch(op.labelidx));
-            }
-            AwwasmOperands::BrIf(op) => {
-                let cond = self.pop_i32()?;
-                if cond != 0 {
-                    return Ok(ControlSignal::Branch(op.labelidx));
-                }
-            }
-            AwwasmOperands::BrTable(op) => {
-                let idx = self.pop_i32()? as u32;
-                let target = if (idx as usize) < op.targets.len() {
-                    op.targets[idx as usize]
-                } else {
-                    op.default
-                };
-                return Ok(ControlSignal::Branch(target));
-            }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_br<S: InstrSource<'a>>(
+        &mut self,
+        _source: &S,
+        _frame_idx: usize, op: &awwasm_parser::components::instructions::BrOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        Ok(ControlSignal::Branch(op.labelidx))
+    }
 
-            // ==============================================================
-            // Control flow — return / end
-            // ==============================================================
-            AwwasmOperands::Return => {
-                return Ok(ControlSignal::Return);
-            }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_br_if<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize, op: &awwasm_parser::components::instructions::BrOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let cond = self.pop_i32()?;
+        if cond != 0 {
+            return Ok(ControlSignal::Branch(op.labelidx));
+        }
+        dispatch_next!(self, source, frame_idx)
+    }
 
-            // End opcode — should only appear at function body end
-            // (block/loop/if handle their own `end` via many_till)
-            // At function level, end means return.
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_br_table<S: InstrSource<'a>>(
+        &mut self,
+        _source: &S,
+        _frame_idx: usize, op: &awwasm_parser::components::instructions::BrTableOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let idx = self.pop_i32()? as u32;
+        let target = if (idx as usize) < op.targets.len() {
+            op.targets[idx as usize]
+        } else {
+            op.default
+        };
+        Ok(ControlSignal::Branch(target))
+    }
 
-            // call_indirect — not yet implemented
-            AwwasmOperands::CallIndirect(_) => {
-                return Err(AwwasmRuntimeError::InstructionParseError(
-                    "call_indirect not yet implemented".into(),
-                ));
-            }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_return<S: InstrSource<'a>>(
+        &mut self,
+        _source: &S,
+        _frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        Ok(ControlSignal::Return)
+    }
 
-            // End — at function level, signals return
-            AwwasmOperands::End => {
-                return Ok(ControlSignal::Return);
-            }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_call_indirect<S: InstrSource<'a>>(
+        &mut self,
+        _source: &S,
+        _frame_idx: usize, _op: &awwasm_parser::components::instructions::CallIndirectOperands
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        Err(AwwasmRuntimeError::InstructionParseError(
+            "call_indirect not yet implemented".into(),
+        ))
+    }
 
-            // Else — should not appear standalone; it's consumed by If parsing
-            AwwasmOperands::Else => {
-                // If we hit this, the parser gave us an unexpected Else.
-                // In the pre-parsed Block/If model this shouldn't happen.
-                return Err(AwwasmRuntimeError::InstructionParseError(
-                    "unexpected else instruction outside of if block".into(),
-                ));
-            }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_end<S: InstrSource<'a>>(
+        &mut self,
+        _source: &S,
+        _frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        Ok(ControlSignal::Return)
+    }
 
-            // Parametric instructions
-            AwwasmOperands::Unreachable => {
-                return Err(AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable));
-            }
-            AwwasmOperands::Nop => {
-                // Do nothing
-            }
-            AwwasmOperands::Drop => {
-                self.pop()?;
-            }
-            AwwasmOperands::Select => {
-                let cond = self.pop_i32()?;
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_else<S: InstrSource<'a>>(
+        &mut self,
+        _source: &S,
+        _frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        // Shouldn't be reached: the parser pre-parses else into IfOperands.
+        Err(AwwasmRuntimeError::InstructionParseError(
+            "unexpected else instruction outside of if block".into(),
+        ))
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_unreachable<S: InstrSource<'a>>(
+        &mut self,
+        _source: &S,
+        _frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        Err(AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_nop<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        // Do nothing
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_drop<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        self.pop()?;
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_select<S: InstrSource<'a>>(
+        &mut self,
+        source: &S,
+        frame_idx: usize
+    ) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let cond = self.pop_i32()?;
                 let val2 = self.pop()?;
                 let val1 = self.pop()?;
                 self.stack.push(if cond != 0 { val1 } else { val2 });
-            }
-        }
-
-        Ok(ControlSignal::None)
+        dispatch_next!(self, source, frame_idx)
     }
 
     // ========================================================================
@@ -532,35 +813,40 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
             return Err(AwwasmRuntimeError::Trap(AwwasmTrap::CallStackExhausted));
         }
 
-        // Ensure resolved
-        self.ensure_resolved(func_addr)?;
+        // Ensure fully parsed
+        self.ensure_fully_parsed(func_addr)?;
 
         let func = self.store.func(func_addr)?;
         match func {
             AwwasmFuncInst::Wasm(wasm) => {
                 let module_addr = wasm.module;
-                let param_count = wasm.func_type.params.len();
-                let result_count = wasm.func_type.results.len();
+                let type_idx = wasm.type_idx;
+                let module_inst = self.store.module(module_addr)
+                    .ok_or(AwwasmRuntimeError::InvalidFuncAddr(func_addr.0))?;
+                let func_type = module_inst.types.get(type_idx as usize)
+                    .ok_or(AwwasmRuntimeError::InvalidFuncAddr(func_addr.0))?;
+                let param_count = func_type.params.len();
+                let result_count = func_type.results.len();
 
-                // Get local declarations from resolved code
+                // Get local declarations from fully-parsed code
                 let local_types = match &wasm.code {
-                    LazyResolvedCodeRef::Resolved { locals, .. } => {
+                    LazyResolvedCodeRef::FullyParsed { locals, .. } => {
                         locals.clone()
                     }
                     _ => return Err(AwwasmRuntimeError::FunctionNotParsed),
                 };
 
-                // Pop params from value stack (they were pushed by the caller)
-                // Params are on the stack in order: first param pushed first (bottom).
+                // Pop params from value stack and move them into the flat locals pool.
                 let stack_len = self.stack.len();
                 if stack_len < param_count {
                     return Err(AwwasmRuntimeError::Trap(AwwasmTrap::StackOverflow));
                 }
                 let params_start = stack_len - param_count;
-                let param_values: Vec<AwwasmValue> = self.stack.drain(params_start..).collect();
+                let locals_start = self.locals_pool.len();
+                // Move params directly into the pool (no intermediate Vec)
+                self.locals_pool.extend(self.stack.drain(params_start..));
 
-                // Build locals: first the params, then zero-initialized declared locals
-                let mut locals = param_values;
+                // Append zero-initialized declared locals
                 for decl in &local_types {
                     let vt = match decl.type_ {
                         AwwasmValueType::I32 => AwwasmValue::I32(0),
@@ -569,16 +855,18 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
                         AwwasmValueType::F64 => AwwasmValue::F64(0.0),
                     };
                     for _ in 0..decl.count {
-                        locals.push(vt);
+                        self.locals_pool.push(vt);
                     }
                 }
+                let locals_count = self.locals_pool.len() - locals_start;
 
                 let stack_height = self.stack.len();
 
                 self.call_stack.push(CallFrame {
                     func_addr,
                     module_addr,
-                    locals,
+                    locals_start,
+                    locals_count,
                     stack_height,
                     arity: result_count as u32,
                 });
@@ -598,37 +886,39 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
         let frame_idx = callee_depth - 1;
         let func_addr = self.call_stack[frame_idx].func_addr;
 
-        let func = self.store.func(func_addr)?;
-        match func {
-            AwwasmFuncInst::Wasm(wasm) => {
-                match &wasm.code {
-                    LazyResolvedCodeRef::Resolved { code, .. } => {
-                        let mut iter = InstructionIterator::new(code);
-                        let _signal = self.execute_instructions_iter(&mut iter, frame_idx)?;
-
-                        // Pop callee frame
-                        let frame = self.call_stack.pop().unwrap();
-                        self.stack.truncate(frame.stack_height + frame.arity as usize);
-                        Ok(())
-                    }
-                    _ => Err(AwwasmRuntimeError::FunctionNotParsed),
+        let instrs_rc = {
+            let func = self.store.func(func_addr)?;
+            match func {
+                AwwasmFuncInst::Wasm(wasm) => match &wasm.code {
+                    LazyResolvedCodeRef::FullyParsed { instrs, .. } => Rc::clone(instrs),
+                    _ => return Err(AwwasmRuntimeError::FunctionNotParsed),
                 }
+                _ => return Err(AwwasmRuntimeError::HostFunctionNotExecutable),
             }
-            _ => Err(AwwasmRuntimeError::HostFunctionNotExecutable),
-        }
+        };
+        let _signal = self.execute_instructions_vec(&instrs_rc, frame_idx)?;
+
+        // Pop callee frame and release its locals from the pool
+        let frame = self.call_stack.pop().unwrap();
+        self.locals_pool.truncate(frame.locals_start);
+        self.stack.truncate(frame.stack_height + frame.arity as usize);
+        Ok(())
     }
 
     // ========================================================================
     // Lazy resolution
     // ========================================================================
 
-    /// Ensure a function body is resolved (parsed from bytes into locals + code).
-    fn ensure_resolved(&mut self, func_addr: AwwasmFuncAddr) -> Result<(), AwwasmRuntimeError> {
+    /// Ensure a function body is fully parsed (locals + instruction Vec cached).
+    /// Subsequent executions use the cached Vec directly; no re-parsing.
+    fn ensure_fully_parsed(&mut self, func_addr: AwwasmFuncAddr) -> Result<(), AwwasmRuntimeError> {
         let func = self.store.func_mut(func_addr)?;
         if let AwwasmFuncInst::Wasm(wasm) = func {
-            if let LazyResolvedCodeRef::Unparsed { bytes } = &wasm.code {
+            if let LazyResolvedCodeRef::Unparsed { bytes } = wasm.code {
                 let (locals, code) = parse_func_body(bytes)?;
-                wasm.code = LazyResolvedCodeRef::Resolved { locals, code };
+                let instrs: Result<Vec<_>, _> = InstructionIterator::new(code).collect();
+                let instrs = instrs.map_err(|e| AwwasmRuntimeError::InstructionParseError(format!("{}", e)))?;
+                wasm.code = LazyResolvedCodeRef::FullyParsed { locals, instrs: Rc::new(instrs) };
             }
         }
         Ok(())

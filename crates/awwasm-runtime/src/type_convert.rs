@@ -12,6 +12,8 @@ pub fn param_type_to_value_type(pt: &awwasm_parser::components::types::ParamType
     match pt {
         awwasm_parser::components::types::ParamType::I32 => Ok(AwwasmValueType::I32),
         awwasm_parser::components::types::ParamType::I64 => Ok(AwwasmValueType::I64),
+        awwasm_parser::components::types::ParamType::F32 => Ok(AwwasmValueType::F32),
+        awwasm_parser::components::types::ParamType::F64 => Ok(AwwasmValueType::F64),
         awwasm_parser::components::types::ParamType::IUnknown => Err(AwwasmInstantiationError::UnsupportedType {
             description: "unknown param type 0x00".into(),
         }),

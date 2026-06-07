@@ -6,6 +6,7 @@
 use alloc::vec::Vec;
 
 use crate::values::{AwwasmFuncAddr, AwwasmTableAddr, AwwasmMemAddr, AwwasmGlobalAddr, AwwasmElemAddr, AwwasmDataAddr, AwwasmExternAddr};
+use crate::func::AwwasmFuncType;
 
 /// Export instance - runtime representation of an export.
 #[derive(Debug, Clone)]
@@ -34,6 +35,8 @@ impl<'a> AwwasmExportInst<'a> {
 /// Store addresses, plus the exports.
 #[derive(Debug, Clone)]
 pub struct AwwasmModuleInst<'a> {
+    /// Function types (indexed by typeidx) — shared across all functions.
+    pub types: Vec<AwwasmFuncType>,
     /// Function addresses (indexed by funcidx).
     pub funcaddrs: Vec<AwwasmFuncAddr>,
     /// Table addresses (indexed by tableidx).
@@ -56,6 +59,7 @@ impl<'a> AwwasmModuleInst<'a> {
     /// Create a new empty module instance.
     pub fn new() -> Self {
         Self {
+            types: Vec::new(),
             funcaddrs: Vec::new(),
             tableaddrs: Vec::new(),
             memaddrs: Vec::new(),
