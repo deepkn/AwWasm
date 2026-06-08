@@ -292,8 +292,27 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
             AwwasmOperands::GlobalSet(op) => handle_op!(op_global_set, self, source, frame_idx, op),
             AwwasmOperands::I32Load(op) => handle_op!(op_i32_load, self, source, frame_idx, op),
             AwwasmOperands::I64Load(op) => handle_op!(op_i64_load, self, source, frame_idx, op),
+            AwwasmOperands::F32Load(op) => handle_op!(op_f32_load, self, source, frame_idx, op),
+            AwwasmOperands::F64Load(op) => handle_op!(op_f64_load, self, source, frame_idx, op),
+            AwwasmOperands::I32Load8S(op) => handle_op!(op_i32_load8_s, self, source, frame_idx, op),
+            AwwasmOperands::I32Load8U(op) => handle_op!(op_i32_load8_u, self, source, frame_idx, op),
+            AwwasmOperands::I32Load16S(op) => handle_op!(op_i32_load16_s, self, source, frame_idx, op),
+            AwwasmOperands::I32Load16U(op) => handle_op!(op_i32_load16_u, self, source, frame_idx, op),
+            AwwasmOperands::I64Load8S(op) => handle_op!(op_i64_load8_s, self, source, frame_idx, op),
+            AwwasmOperands::I64Load8U(op) => handle_op!(op_i64_load8_u, self, source, frame_idx, op),
+            AwwasmOperands::I64Load16S(op) => handle_op!(op_i64_load16_s, self, source, frame_idx, op),
+            AwwasmOperands::I64Load16U(op) => handle_op!(op_i64_load16_u, self, source, frame_idx, op),
+            AwwasmOperands::I64Load32S(op) => handle_op!(op_i64_load32_s, self, source, frame_idx, op),
+            AwwasmOperands::I64Load32U(op) => handle_op!(op_i64_load32_u, self, source, frame_idx, op),
             AwwasmOperands::I32Store(op) => handle_op!(op_i32_store, self, source, frame_idx, op),
             AwwasmOperands::I64Store(op) => handle_op!(op_i64_store, self, source, frame_idx, op),
+            AwwasmOperands::F32Store(op) => handle_op!(op_f32_store, self, source, frame_idx, op),
+            AwwasmOperands::F64Store(op) => handle_op!(op_f64_store, self, source, frame_idx, op),
+            AwwasmOperands::I32Store8(op) => handle_op!(op_i32_store8, self, source, frame_idx, op),
+            AwwasmOperands::I32Store16(op) => handle_op!(op_i32_store16, self, source, frame_idx, op),
+            AwwasmOperands::I64Store8(op) => handle_op!(op_i64_store8, self, source, frame_idx, op),
+            AwwasmOperands::I64Store16(op) => handle_op!(op_i64_store16, self, source, frame_idx, op),
+            AwwasmOperands::I64Store32(op) => handle_op!(op_i64_store32, self, source, frame_idx, op),
             AwwasmOperands::MemorySize(op) => handle_op!(op_memory_size, self, source, frame_idx, op),
             AwwasmOperands::MemoryGrow(op) => handle_op!(op_memory_grow, self, source, frame_idx, op),
             AwwasmOperands::Call(op) => handle_op!(op_call, self, source, frame_idx, op),
@@ -312,6 +331,146 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
             AwwasmOperands::Drop => handle_op!(op_drop, self, source, frame_idx),
             AwwasmOperands::Select => handle_op!(op_select, self, source, frame_idx),
 
+            // i32 comparisons
+            AwwasmOperands::I32LtS => handle_op!(op_i32_lt_s, self, source, frame_idx),
+            AwwasmOperands::I32LtU => handle_op!(op_i32_lt_u, self, source, frame_idx),
+            AwwasmOperands::I32GtS => handle_op!(op_i32_gt_s, self, source, frame_idx),
+            AwwasmOperands::I32GtU => handle_op!(op_i32_gt_u, self, source, frame_idx),
+            AwwasmOperands::I32LeS => handle_op!(op_i32_le_s, self, source, frame_idx),
+            AwwasmOperands::I32LeU => handle_op!(op_i32_le_u, self, source, frame_idx),
+            AwwasmOperands::I32GeS => handle_op!(op_i32_ge_s, self, source, frame_idx),
+            AwwasmOperands::I32GeU => handle_op!(op_i32_ge_u, self, source, frame_idx),
+            // i32 unary
+            AwwasmOperands::I32Clz    => handle_op!(op_i32_clz, self, source, frame_idx),
+            AwwasmOperands::I32Ctz    => handle_op!(op_i32_ctz, self, source, frame_idx),
+            AwwasmOperands::I32Popcnt => handle_op!(op_i32_popcnt, self, source, frame_idx),
+            // i32 div/rem
+            AwwasmOperands::I32DivS => handle_op!(op_i32_div_s, self, source, frame_idx),
+            AwwasmOperands::I32DivU => handle_op!(op_i32_div_u, self, source, frame_idx),
+            AwwasmOperands::I32RemS => handle_op!(op_i32_rem_s, self, source, frame_idx),
+            AwwasmOperands::I32RemU => handle_op!(op_i32_rem_u, self, source, frame_idx),
+            // i32 bitwise/shift/rotate
+            AwwasmOperands::I32And  => handle_op!(op_i32_and, self, source, frame_idx),
+            AwwasmOperands::I32Or   => handle_op!(op_i32_or, self, source, frame_idx),
+            AwwasmOperands::I32Xor  => handle_op!(op_i32_xor, self, source, frame_idx),
+            AwwasmOperands::I32Shl  => handle_op!(op_i32_shl, self, source, frame_idx),
+            AwwasmOperands::I32ShrS => handle_op!(op_i32_shr_s, self, source, frame_idx),
+            AwwasmOperands::I32ShrU => handle_op!(op_i32_shr_u, self, source, frame_idx),
+            AwwasmOperands::I32Rotl => handle_op!(op_i32_rotl, self, source, frame_idx),
+            AwwasmOperands::I32Rotr => handle_op!(op_i32_rotr, self, source, frame_idx),
+
+            // i64 comparisons
+            AwwasmOperands::I64Eqz  => handle_op!(op_i64_eqz, self, source, frame_idx),
+            AwwasmOperands::I64Eq   => handle_op!(op_i64_eq, self, source, frame_idx),
+            AwwasmOperands::I64Ne   => handle_op!(op_i64_ne, self, source, frame_idx),
+            AwwasmOperands::I64LtS  => handle_op!(op_i64_lt_s, self, source, frame_idx),
+            AwwasmOperands::I64LtU  => handle_op!(op_i64_lt_u, self, source, frame_idx),
+            AwwasmOperands::I64GtS  => handle_op!(op_i64_gt_s, self, source, frame_idx),
+            AwwasmOperands::I64GtU  => handle_op!(op_i64_gt_u, self, source, frame_idx),
+            AwwasmOperands::I64LeS  => handle_op!(op_i64_le_s, self, source, frame_idx),
+            AwwasmOperands::I64LeU  => handle_op!(op_i64_le_u, self, source, frame_idx),
+            AwwasmOperands::I64GeS  => handle_op!(op_i64_ge_s, self, source, frame_idx),
+            AwwasmOperands::I64GeU  => handle_op!(op_i64_ge_u, self, source, frame_idx),
+            // i64 unary
+            AwwasmOperands::I64Clz    => handle_op!(op_i64_clz, self, source, frame_idx),
+            AwwasmOperands::I64Ctz    => handle_op!(op_i64_ctz, self, source, frame_idx),
+            AwwasmOperands::I64Popcnt => handle_op!(op_i64_popcnt, self, source, frame_idx),
+            // i64 arithmetic
+            AwwasmOperands::I64Add  => handle_op!(op_i64_add, self, source, frame_idx),
+            AwwasmOperands::I64Sub  => handle_op!(op_i64_sub, self, source, frame_idx),
+            AwwasmOperands::I64Mul  => handle_op!(op_i64_mul, self, source, frame_idx),
+            AwwasmOperands::I64DivS => handle_op!(op_i64_div_s, self, source, frame_idx),
+            AwwasmOperands::I64DivU => handle_op!(op_i64_div_u, self, source, frame_idx),
+            AwwasmOperands::I64RemS => handle_op!(op_i64_rem_s, self, source, frame_idx),
+            AwwasmOperands::I64RemU => handle_op!(op_i64_rem_u, self, source, frame_idx),
+            AwwasmOperands::I64And  => handle_op!(op_i64_and, self, source, frame_idx),
+            AwwasmOperands::I64Or   => handle_op!(op_i64_or, self, source, frame_idx),
+            AwwasmOperands::I64Xor  => handle_op!(op_i64_xor, self, source, frame_idx),
+            AwwasmOperands::I64Shl  => handle_op!(op_i64_shl, self, source, frame_idx),
+            AwwasmOperands::I64ShrS => handle_op!(op_i64_shr_s, self, source, frame_idx),
+            AwwasmOperands::I64ShrU => handle_op!(op_i64_shr_u, self, source, frame_idx),
+            AwwasmOperands::I64Rotl => handle_op!(op_i64_rotl, self, source, frame_idx),
+            AwwasmOperands::I64Rotr => handle_op!(op_i64_rotr, self, source, frame_idx),
+
+            // f32 comparisons
+            AwwasmOperands::F32Eq => handle_op!(op_f32_eq, self, source, frame_idx),
+            AwwasmOperands::F32Ne => handle_op!(op_f32_ne, self, source, frame_idx),
+            AwwasmOperands::F32Lt => handle_op!(op_f32_lt, self, source, frame_idx),
+            AwwasmOperands::F32Gt => handle_op!(op_f32_gt, self, source, frame_idx),
+            AwwasmOperands::F32Le => handle_op!(op_f32_le, self, source, frame_idx),
+            AwwasmOperands::F32Ge => handle_op!(op_f32_ge, self, source, frame_idx),
+            // f64 comparisons
+            AwwasmOperands::F64Eq => handle_op!(op_f64_eq, self, source, frame_idx),
+            AwwasmOperands::F64Ne => handle_op!(op_f64_ne, self, source, frame_idx),
+            AwwasmOperands::F64Lt => handle_op!(op_f64_lt, self, source, frame_idx),
+            AwwasmOperands::F64Gt => handle_op!(op_f64_gt, self, source, frame_idx),
+            AwwasmOperands::F64Le => handle_op!(op_f64_le, self, source, frame_idx),
+            AwwasmOperands::F64Ge => handle_op!(op_f64_ge, self, source, frame_idx),
+            // f32 arithmetic
+            AwwasmOperands::F32Abs      => handle_op!(op_f32_abs, self, source, frame_idx),
+            AwwasmOperands::F32Neg      => handle_op!(op_f32_neg, self, source, frame_idx),
+            AwwasmOperands::F32Ceil     => handle_op!(op_f32_ceil, self, source, frame_idx),
+            AwwasmOperands::F32Floor    => handle_op!(op_f32_floor, self, source, frame_idx),
+            AwwasmOperands::F32Trunc    => handle_op!(op_f32_trunc, self, source, frame_idx),
+            AwwasmOperands::F32Nearest  => handle_op!(op_f32_nearest, self, source, frame_idx),
+            AwwasmOperands::F32Sqrt     => handle_op!(op_f32_sqrt, self, source, frame_idx),
+            AwwasmOperands::F32Add      => handle_op!(op_f32_add, self, source, frame_idx),
+            AwwasmOperands::F32Sub      => handle_op!(op_f32_sub, self, source, frame_idx),
+            AwwasmOperands::F32Mul      => handle_op!(op_f32_mul, self, source, frame_idx),
+            AwwasmOperands::F32Div      => handle_op!(op_f32_div, self, source, frame_idx),
+            AwwasmOperands::F32Min      => handle_op!(op_f32_min, self, source, frame_idx),
+            AwwasmOperands::F32Max      => handle_op!(op_f32_max, self, source, frame_idx),
+            AwwasmOperands::F32Copysign => handle_op!(op_f32_copysign, self, source, frame_idx),
+            // f64 arithmetic
+            AwwasmOperands::F64Abs      => handle_op!(op_f64_abs, self, source, frame_idx),
+            AwwasmOperands::F64Neg      => handle_op!(op_f64_neg, self, source, frame_idx),
+            AwwasmOperands::F64Ceil     => handle_op!(op_f64_ceil, self, source, frame_idx),
+            AwwasmOperands::F64Floor    => handle_op!(op_f64_floor, self, source, frame_idx),
+            AwwasmOperands::F64Trunc    => handle_op!(op_f64_trunc, self, source, frame_idx),
+            AwwasmOperands::F64Nearest  => handle_op!(op_f64_nearest, self, source, frame_idx),
+            AwwasmOperands::F64Sqrt     => handle_op!(op_f64_sqrt, self, source, frame_idx),
+            AwwasmOperands::F64Add      => handle_op!(op_f64_add, self, source, frame_idx),
+            AwwasmOperands::F64Sub      => handle_op!(op_f64_sub, self, source, frame_idx),
+            AwwasmOperands::F64Mul      => handle_op!(op_f64_mul, self, source, frame_idx),
+            AwwasmOperands::F64Div      => handle_op!(op_f64_div, self, source, frame_idx),
+            AwwasmOperands::F64Min      => handle_op!(op_f64_min, self, source, frame_idx),
+            AwwasmOperands::F64Max      => handle_op!(op_f64_max, self, source, frame_idx),
+            AwwasmOperands::F64Copysign => handle_op!(op_f64_copysign, self, source, frame_idx),
+
+            // Type conversions
+            AwwasmOperands::I32WrapI64      => handle_op!(op_i32_wrap_i64, self, source, frame_idx),
+            AwwasmOperands::I32TruncF32S    => handle_op!(op_i32_trunc_f32_s, self, source, frame_idx),
+            AwwasmOperands::I32TruncF32U    => handle_op!(op_i32_trunc_f32_u, self, source, frame_idx),
+            AwwasmOperands::I32TruncF64S    => handle_op!(op_i32_trunc_f64_s, self, source, frame_idx),
+            AwwasmOperands::I32TruncF64U    => handle_op!(op_i32_trunc_f64_u, self, source, frame_idx),
+            AwwasmOperands::I64ExtendI32S   => handle_op!(op_i64_extend_i32_s, self, source, frame_idx),
+            AwwasmOperands::I64ExtendI32U   => handle_op!(op_i64_extend_i32_u, self, source, frame_idx),
+            AwwasmOperands::I64TruncF32S    => handle_op!(op_i64_trunc_f32_s, self, source, frame_idx),
+            AwwasmOperands::I64TruncF32U    => handle_op!(op_i64_trunc_f32_u, self, source, frame_idx),
+            AwwasmOperands::I64TruncF64S    => handle_op!(op_i64_trunc_f64_s, self, source, frame_idx),
+            AwwasmOperands::I64TruncF64U    => handle_op!(op_i64_trunc_f64_u, self, source, frame_idx),
+            AwwasmOperands::F32ConvertI32S  => handle_op!(op_f32_convert_i32_s, self, source, frame_idx),
+            AwwasmOperands::F32ConvertI32U  => handle_op!(op_f32_convert_i32_u, self, source, frame_idx),
+            AwwasmOperands::F32ConvertI64S  => handle_op!(op_f32_convert_i64_s, self, source, frame_idx),
+            AwwasmOperands::F32ConvertI64U  => handle_op!(op_f32_convert_i64_u, self, source, frame_idx),
+            AwwasmOperands::F32DemoteF64    => handle_op!(op_f32_demote_f64, self, source, frame_idx),
+            AwwasmOperands::F64ConvertI32S  => handle_op!(op_f64_convert_i32_s, self, source, frame_idx),
+            AwwasmOperands::F64ConvertI32U  => handle_op!(op_f64_convert_i32_u, self, source, frame_idx),
+            AwwasmOperands::F64ConvertI64S  => handle_op!(op_f64_convert_i64_s, self, source, frame_idx),
+            AwwasmOperands::F64ConvertI64U  => handle_op!(op_f64_convert_i64_u, self, source, frame_idx),
+            AwwasmOperands::F64PromoteF32   => handle_op!(op_f64_promote_f32, self, source, frame_idx),
+            AwwasmOperands::I32ReinterpretF32 => handle_op!(op_i32_reinterpret_f32, self, source, frame_idx),
+            AwwasmOperands::I64ReinterpretF64 => handle_op!(op_i64_reinterpret_f64, self, source, frame_idx),
+            AwwasmOperands::F32ReinterpretI32 => handle_op!(op_f32_reinterpret_i32, self, source, frame_idx),
+            AwwasmOperands::F64ReinterpretI64 => handle_op!(op_f64_reinterpret_i64, self, source, frame_idx),
+
+            // Sign-extension operators
+            AwwasmOperands::I32Extend8S  => handle_op!(op_i32_extend8_s, self, source, frame_idx),
+            AwwasmOperands::I32Extend16S => handle_op!(op_i32_extend16_s, self, source, frame_idx),
+            AwwasmOperands::I64Extend8S  => handle_op!(op_i64_extend8_s, self, source, frame_idx),
+            AwwasmOperands::I64Extend16S => handle_op!(op_i64_extend16_s, self, source, frame_idx),
+            AwwasmOperands::I64Extend32S => handle_op!(op_i64_extend32_s, self, source, frame_idx),
+            AwwasmOperands::Misc(op) => handle_op!(op_misc, self, source, frame_idx, op),
         }
     }
 
@@ -512,7 +671,7 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
         frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg
     ) -> Result<ControlSignal, AwwasmRuntimeError> {
         let base = self.pop_i32()? as u32;
-        let addr = base.wrapping_add(op.offset);
+        let addr = Self::eff_addr(base, op.offset)?;
         let mem_addr = self.resolve_mem(frame_idx, 0)?;
         let mem = self.store.mem(mem_addr)?;
         let val = mem.read_i32(addr)?;
@@ -527,7 +686,7 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
         frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg
     ) -> Result<ControlSignal, AwwasmRuntimeError> {
         let base = self.pop_i32()? as u32;
-        let addr = base.wrapping_add(op.offset);
+        let addr = Self::eff_addr(base, op.offset)?;
         let mem_addr = self.resolve_mem(frame_idx, 0)?;
         let mem = self.store.mem(mem_addr)?;
         let val = mem.read_i64(addr)?;
@@ -543,7 +702,7 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
     ) -> Result<ControlSignal, AwwasmRuntimeError> {
         let val = self.pop_i32()?;
         let base = self.pop_i32()? as u32;
-        let addr = base.wrapping_add(op.offset);
+        let addr = Self::eff_addr(base, op.offset)?;
         let mem_addr = self.resolve_mem(frame_idx, 0)?;
         let mem = self.store.mem_mut(mem_addr)?;
         mem.write_i32(addr, val)?;
@@ -558,10 +717,182 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
     ) -> Result<ControlSignal, AwwasmRuntimeError> {
         let val = self.pop_i64()?;
         let base = self.pop_i32()? as u32;
-        let addr = base.wrapping_add(op.offset);
+        let addr = Self::eff_addr(base, op.offset)?;
         let mem_addr = self.resolve_mem(frame_idx, 0)?;
         let mem = self.store.mem_mut(mem_addr)?;
         mem.write_i64(addr, val)?;
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_load<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_f32(addr)?;
+        self.stack.push(AwwasmValue::F32(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_load<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_f64(addr)?;
+        self.stack.push(AwwasmValue::F64(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_load8_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_u8(addr)? as i8 as i32;
+        self.stack.push(AwwasmValue::I32(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_load8_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_u8(addr)? as i32;
+        self.stack.push(AwwasmValue::I32(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_load16_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_u16(addr)? as i16 as i32;
+        self.stack.push(AwwasmValue::I32(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_load16_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_u16(addr)? as i32;
+        self.stack.push(AwwasmValue::I32(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_load8_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_u8(addr)? as i8 as i64;
+        self.stack.push(AwwasmValue::I64(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_load8_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_u8(addr)? as i64;
+        self.stack.push(AwwasmValue::I64(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_load16_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_u16(addr)? as i16 as i64;
+        self.stack.push(AwwasmValue::I64(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_load16_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_u16(addr)? as i64;
+        self.stack.push(AwwasmValue::I64(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_load32_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_u32(addr)? as i32 as i64;
+        self.stack.push(AwwasmValue::I64(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_load32_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        let val = self.store.mem(mem_addr)?.read_u32(addr)? as i64;
+        self.stack.push(AwwasmValue::I64(val));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_store<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop_f32()?;
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        self.store.mem_mut(mem_addr)?.write_f32(addr, val)?;
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_store<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop_f64()?;
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        self.store.mem_mut(mem_addr)?.write_f64(addr, val)?;
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_store8<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop_i32()?;
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        self.store.mem_mut(mem_addr)?.write_u8(addr, val as u8)?;
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_store16<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop_i32()?;
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        self.store.mem_mut(mem_addr)?.write_u16(addr, val as u16)?;
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_store8<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop_i64()?;
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        self.store.mem_mut(mem_addr)?.write_u8(addr, val as u8)?;
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_store16<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop_i64()?;
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        self.store.mem_mut(mem_addr)?.write_u16(addr, val as u16)?;
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_store32<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MemArg) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let val = self.pop_i64()?;
+        let base = self.pop_i32()? as u32;
+        let addr = Self::eff_addr(base, op.offset)?;
+        let mem_addr = self.resolve_mem(frame_idx, 0)?;
+        self.store.mem_mut(mem_addr)?.write_u32(addr, val as u32)?;
         dispatch_next!(self, source, frame_idx)
     }
 
@@ -934,6 +1265,17 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
     }
 
     #[inline]
+    // Compute effective memory address, trapping if base + offset overflows u32.
+    #[inline]
+    fn eff_addr(base: u32, offset: u32) -> Result<u32, AwwasmRuntimeError> {
+        (base as u64).checked_add(offset as u64)
+            .filter(|&a| a <= u32::MAX as u64)
+            .map(|a| a as u32)
+            .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::MemoryOutOfBounds {
+                offset: base, size: offset, memory_size: 0,
+            }))
+    }
+
     fn pop_i32(&mut self) -> Result<i32, AwwasmRuntimeError> {
         match self.pop()? {
             AwwasmValue::I32(v) => Ok(v),
@@ -1001,6 +1343,940 @@ impl<'a, 'b> AwwasmThread<'a, 'b> {
             .ok_or_else(|| AwwasmRuntimeError::Trap(AwwasmTrap::Unreachable))?;
         module_inst.mem(memidx)
             .ok_or(AwwasmRuntimeError::InvalidMemAddr(memidx))
+    }
+
+    // ========================================================================
+    // Additional pop helpers
+    // ========================================================================
+
+    #[inline]
+    fn pop_f32(&mut self) -> Result<f32, AwwasmRuntimeError> {
+        match self.pop()? {
+            AwwasmValue::F32(v) => Ok(v),
+            other => Err(AwwasmRuntimeError::TypeMismatch {
+                expected: "f32".into(),
+                got: format!("{:?}", other.value_type()),
+            }),
+        }
+    }
+
+    #[inline]
+    fn pop_f64(&mut self) -> Result<f64, AwwasmRuntimeError> {
+        match self.pop()? {
+            AwwasmValue::F64(v) => Ok(v),
+            other => Err(AwwasmRuntimeError::TypeMismatch {
+                expected: "f64".into(),
+                got: format!("{:?}", other.value_type()),
+            }),
+        }
+    }
+
+    // ========================================================================
+    // i32 comparison handlers
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_lt_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(if a < b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_lt_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()? as u32; let a = self.pop_i32()? as u32;
+        self.stack.push(AwwasmValue::I32(if a < b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_gt_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(if a > b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_gt_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()? as u32; let a = self.pop_i32()? as u32;
+        self.stack.push(AwwasmValue::I32(if a > b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_le_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(if a <= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_le_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()? as u32; let a = self.pop_i32()? as u32;
+        self.stack.push(AwwasmValue::I32(if a <= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_ge_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(if a >= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_ge_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()? as u32; let a = self.pop_i32()? as u32;
+        self.stack.push(AwwasmValue::I32(if a >= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // i32 unary bit ops
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_clz<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(v.leading_zeros() as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_ctz<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(v.trailing_zeros() as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_popcnt<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(v.count_ones() as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // i32 div/rem
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_div_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        if b == 0 { return Err(AwwasmTrap::DivisionByZero.into()); }
+        let result = a.checked_div(b).ok_or(AwwasmRuntimeError::Trap(AwwasmTrap::IntegerOverflow))?;
+        self.stack.push(AwwasmValue::I32(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_div_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()? as u32; let a = self.pop_i32()? as u32;
+        if b == 0 { return Err(AwwasmTrap::DivisionByZero.into()); }
+        self.stack.push(AwwasmValue::I32((a / b) as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_rem_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        if b == 0 { return Err(AwwasmTrap::DivisionByZero.into()); }
+        // MIN % -1 = 0 (no overflow trap for rem)
+        let result = if a == i32::MIN && b == -1 { 0 } else { a % b };
+        self.stack.push(AwwasmValue::I32(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_rem_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()? as u32; let a = self.pop_i32()? as u32;
+        if b == 0 { return Err(AwwasmTrap::DivisionByZero.into()); }
+        self.stack.push(AwwasmValue::I32((a % b) as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // i32 bitwise/shift/rotate
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_and<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(a & b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_or<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(a | b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_xor<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(a ^ b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_shl<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(a.wrapping_shl((b as u32) & 31)));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_shr_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(a.wrapping_shr((b as u32) & 31)));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_shr_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()? as u32;
+        self.stack.push(AwwasmValue::I32(a.wrapping_shr((b as u32) & 31) as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_rotl<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(a.rotate_left((b as u32) & 31)));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_rotr<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i32()?; let a = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(a.rotate_right((b as u32) & 31)));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // i64 comparison handlers
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_eqz<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I32(if v == 0 { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_eq<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I32(if a == b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_ne<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I32(if a != b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_lt_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I32(if a < b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_lt_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()? as u64; let a = self.pop_i64()? as u64;
+        self.stack.push(AwwasmValue::I32(if a < b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_gt_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I32(if a > b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_gt_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()? as u64; let a = self.pop_i64()? as u64;
+        self.stack.push(AwwasmValue::I32(if a > b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_le_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I32(if a <= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_le_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()? as u64; let a = self.pop_i64()? as u64;
+        self.stack.push(AwwasmValue::I32(if a <= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_ge_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I32(if a >= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_ge_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()? as u64; let a = self.pop_i64()? as u64;
+        self.stack.push(AwwasmValue::I32(if a >= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // i64 unary + arithmetic
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_clz<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(v.leading_zeros() as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_ctz<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(v.trailing_zeros() as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_popcnt<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(v.count_ones() as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_add<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(a.wrapping_add(b)));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_sub<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(a.wrapping_sub(b)));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_mul<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(a.wrapping_mul(b)));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_div_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        if b == 0 { return Err(AwwasmTrap::DivisionByZero.into()); }
+        let result = a.checked_div(b).ok_or(AwwasmRuntimeError::Trap(AwwasmTrap::IntegerOverflow))?;
+        self.stack.push(AwwasmValue::I64(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_div_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()? as u64; let a = self.pop_i64()? as u64;
+        if b == 0 { return Err(AwwasmTrap::DivisionByZero.into()); }
+        self.stack.push(AwwasmValue::I64((a / b) as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_rem_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        if b == 0 { return Err(AwwasmTrap::DivisionByZero.into()); }
+        let result = if a == i64::MIN && b == -1 { 0 } else { a % b };
+        self.stack.push(AwwasmValue::I64(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_rem_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()? as u64; let a = self.pop_i64()? as u64;
+        if b == 0 { return Err(AwwasmTrap::DivisionByZero.into()); }
+        self.stack.push(AwwasmValue::I64((a % b) as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_and<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(a & b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_or<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(a | b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_xor<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(a ^ b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_shl<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(a.wrapping_shl((b as u32) & 63)));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_shr_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(a.wrapping_shr((b as u32) & 63)));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_shr_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()? as u64;
+        self.stack.push(AwwasmValue::I64(a.wrapping_shr((b as u32) & 63) as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_rotl<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(a.rotate_left((b as u32) & 63)));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_rotr<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_i64()?; let a = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(a.rotate_right((b as u32) & 63)));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // f32 comparisons (return i32 0/1; Rust float comparisons yield false for NaN)
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_eq<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::I32(if a == b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_ne<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::I32(if a != b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_lt<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::I32(if a < b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_gt<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::I32(if a > b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_le<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::I32(if a <= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_ge<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::I32(if a >= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // f64 comparisons
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_eq<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::I32(if a == b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_ne<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::I32(if a != b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_lt<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::I32(if a < b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_gt<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::I32(if a > b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_le<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::I32(if a <= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_ge<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::I32(if a >= b { 1 } else { 0 }));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // f32 arithmetic
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_abs<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        self.stack.push(AwwasmValue::F32(v.abs()));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_neg<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        self.stack.push(AwwasmValue::F32(-v));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_ceil<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        let result = if v.is_nan() { f32::from_bits(v.to_bits() | 0x0040_0000) } else { v.ceil() };
+        self.stack.push(AwwasmValue::F32(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_floor<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        let result = if v.is_nan() { f32::from_bits(v.to_bits() | 0x0040_0000) } else { v.floor() };
+        self.stack.push(AwwasmValue::F32(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_trunc<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        let result = if v.is_nan() { f32::from_bits(v.to_bits() | 0x0040_0000) } else { v.trunc() };
+        self.stack.push(AwwasmValue::F32(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_nearest<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        let result = if v.is_nan() { f32::from_bits(v.to_bits() | 0x0040_0000) } else { v.round_ties_even() };
+        self.stack.push(AwwasmValue::F32(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_sqrt<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        self.stack.push(AwwasmValue::F32(v.sqrt()));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_add<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::F32(a + b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_sub<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::F32(a - b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_mul<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::F32(a * b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_div<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::F32(a / b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_min<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        // WASM: NaN → canonical NaN; ±0.0 → -0.0 (OR bits to pick the negative zero)
+        let result = if a.is_nan() || b.is_nan() { f32::from_bits(0x7FC0_0000) }
+                     else if a == 0.0 && b == 0.0 { f32::from_bits(a.to_bits() | b.to_bits()) }
+                     else { a.min(b) };
+        self.stack.push(AwwasmValue::F32(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_max<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        // WASM: NaN → canonical NaN; ±0.0 → +0.0 (AND bits to pick the positive zero)
+        let result = if a.is_nan() || b.is_nan() { f32::from_bits(0x7FC0_0000) }
+                     else if a == 0.0 && b == 0.0 { f32::from_bits(a.to_bits() & b.to_bits()) }
+                     else { a.max(b) };
+        self.stack.push(AwwasmValue::F32(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_copysign<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f32()?; let a = self.pop_f32()?;
+        self.stack.push(AwwasmValue::F32(a.copysign(b)));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // f64 arithmetic
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_abs<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        self.stack.push(AwwasmValue::F64(v.abs()));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_neg<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        self.stack.push(AwwasmValue::F64(-v));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_ceil<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        let result = if v.is_nan() { f64::from_bits(v.to_bits() | 0x0008_0000_0000_0000) } else { v.ceil() };
+        self.stack.push(AwwasmValue::F64(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_floor<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        let result = if v.is_nan() { f64::from_bits(v.to_bits() | 0x0008_0000_0000_0000) } else { v.floor() };
+        self.stack.push(AwwasmValue::F64(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_trunc<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        let result = if v.is_nan() { f64::from_bits(v.to_bits() | 0x0008_0000_0000_0000) } else { v.trunc() };
+        self.stack.push(AwwasmValue::F64(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_nearest<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        let result = if v.is_nan() { f64::from_bits(v.to_bits() | 0x0008_0000_0000_0000) } else { v.round_ties_even() };
+        self.stack.push(AwwasmValue::F64(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_sqrt<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        self.stack.push(AwwasmValue::F64(v.sqrt()));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_add<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::F64(a + b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_sub<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::F64(a - b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_mul<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::F64(a * b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_div<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::F64(a / b));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_min<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        // WASM: NaN → canonical NaN; ±0.0 → -0.0 (OR bits to pick the negative zero)
+        let result = if a.is_nan() || b.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) }
+                     else if a == 0.0 && b == 0.0 { f64::from_bits(a.to_bits() | b.to_bits()) }
+                     else { a.min(b) };
+        self.stack.push(AwwasmValue::F64(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_max<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        // WASM: NaN → canonical NaN; ±0.0 → +0.0 (AND bits to pick the positive zero)
+        let result = if a.is_nan() || b.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) }
+                     else if a == 0.0 && b == 0.0 { f64::from_bits(a.to_bits() & b.to_bits()) }
+                     else { a.max(b) };
+        self.stack.push(AwwasmValue::F64(result));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_copysign<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let b = self.pop_f64()?; let a = self.pop_f64()?;
+        self.stack.push(AwwasmValue::F64(a.copysign(b)));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // Type conversion handlers
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_wrap_i64<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I32(v as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_trunc_f32_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        if v.is_nan() || v >= 2147483648.0_f32 || v < -2147483648.0_f32 {
+            return Err(AwwasmTrap::InvalidConversionToInteger.into());
+        }
+        self.stack.push(AwwasmValue::I32(v as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_trunc_f32_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        // Values in (-1, 0) truncate to 0 — valid; trap only if trunc result is negative (v <= -1)
+        if v.is_nan() || v >= 4294967296.0_f32 || v <= -1.0_f32 {
+            return Err(AwwasmTrap::InvalidConversionToInteger.into());
+        }
+        self.stack.push(AwwasmValue::I32((v as u32) as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_trunc_f64_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        // Lower bound: -2147483648.9 truncates to -2147483648 (i32::MIN) which is valid.
+        // Trap only when truncated result would be < i32::MIN, i.e. v <= -2147483649.0.
+        if v.is_nan() || v >= 2147483648.0_f64 || v <= -2147483649.0_f64 {
+            return Err(AwwasmTrap::InvalidConversionToInteger.into());
+        }
+        self.stack.push(AwwasmValue::I32(v as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_trunc_f64_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        if v.is_nan() || v >= 4294967296.0_f64 || v <= -1.0_f64 {
+            return Err(AwwasmTrap::InvalidConversionToInteger.into());
+        }
+        self.stack.push(AwwasmValue::I32((v as u32) as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_extend_i32_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I64(v as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_extend_i32_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()? as u32;
+        self.stack.push(AwwasmValue::I64(v as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_trunc_f32_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        if v.is_nan() || v >= 9.223372036854776e18_f32 || v < -9.223372036854776e18_f32 {
+            return Err(AwwasmTrap::InvalidConversionToInteger.into());
+        }
+        self.stack.push(AwwasmValue::I64(v as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_trunc_f32_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        if v.is_nan() || v >= 1.8446744073709552e19_f32 || v <= -1.0_f32 {
+            return Err(AwwasmTrap::InvalidConversionToInteger.into());
+        }
+        self.stack.push(AwwasmValue::I64((v as u64) as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_trunc_f64_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        if v.is_nan() || v >= 9.223372036854776e18_f64 || v < -9.223372036854776e18_f64 {
+            return Err(AwwasmTrap::InvalidConversionToInteger.into());
+        }
+        self.stack.push(AwwasmValue::I64(v as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_trunc_f64_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        if v.is_nan() || v >= 1.8446744073709552e19_f64 || v <= -1.0_f64 {
+            return Err(AwwasmTrap::InvalidConversionToInteger.into());
+        }
+        self.stack.push(AwwasmValue::I64((v as u64) as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_convert_i32_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()?;
+        self.stack.push(AwwasmValue::F32(v as f32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_convert_i32_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()? as u32;
+        self.stack.push(AwwasmValue::F32(v as f32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_convert_i64_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::F32(v as f32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_convert_i64_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()? as u64;
+        self.stack.push(AwwasmValue::F32(v as f32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_demote_f64<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        self.stack.push(AwwasmValue::F32(v as f32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_convert_i32_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()?;
+        self.stack.push(AwwasmValue::F64(v as f64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_convert_i32_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()? as u32;
+        self.stack.push(AwwasmValue::F64(v as f64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_convert_i64_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::F64(v as f64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_convert_i64_u<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()? as u64;
+        self.stack.push(AwwasmValue::F64(v as f64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_promote_f32<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        self.stack.push(AwwasmValue::F64(v as f64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_reinterpret_f32<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f32()?;
+        self.stack.push(AwwasmValue::I32(v.to_bits() as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_reinterpret_f64<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_f64()?;
+        self.stack.push(AwwasmValue::I64(v.to_bits() as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f32_reinterpret_i32<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()?;
+        self.stack.push(AwwasmValue::F32(f32::from_bits(v as u32)));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_f64_reinterpret_i64<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::F64(f64::from_bits(v as u64)));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // Sign-extension operators
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_extend8_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(v as i8 as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i32_extend16_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i32()?;
+        self.stack.push(AwwasmValue::I32(v as i16 as i32));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_extend8_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(v as i8 as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_extend16_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(v as i16 as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_i64_extend32_s<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize) -> Result<ControlSignal, AwwasmRuntimeError> {
+        let v = self.pop_i64()?;
+        self.stack.push(AwwasmValue::I64(v as i32 as i64));
+        dispatch_next!(self, source, frame_idx)
+    }
+
+    // ========================================================================
+    // 0xFC prefix: saturating truncation and bulk memory ops
+    // ========================================================================
+
+    #[cfg_attr(feature = "tail_calls", inline(always))]
+    fn op_misc<S: InstrSource<'a>>(&mut self, source: &S, frame_idx: usize, op: &awwasm_parser::components::instructions::MiscOperands) -> Result<ControlSignal, AwwasmRuntimeError> {
+        match op.sub_op {
+            0 => { // i32.trunc_sat_f32_s
+                let v = self.pop_f32()?;
+                let result = if v.is_nan() { 0 } else if v >= 2147483648.0_f32 { i32::MAX } else if v < -2147483648.0_f32 { i32::MIN } else { v as i32 };
+                self.stack.push(AwwasmValue::I32(result));
+            }
+            1 => { // i32.trunc_sat_f32_u
+                let v = self.pop_f32()?;
+                let result = if v.is_nan() || v <= -1.0_f32 { 0u32 } else if v >= 4294967296.0_f32 { u32::MAX } else { v as u32 };
+                self.stack.push(AwwasmValue::I32(result as i32));
+            }
+            2 => { // i32.trunc_sat_f64_s
+                let v = self.pop_f64()?;
+                let result = if v.is_nan() { 0 } else if v >= 2147483648.0_f64 { i32::MAX } else if v < -2147483648.0_f64 { i32::MIN } else { v as i32 };
+                self.stack.push(AwwasmValue::I32(result));
+            }
+            3 => { // i32.trunc_sat_f64_u
+                let v = self.pop_f64()?;
+                let result = if v.is_nan() || v <= -1.0_f64 { 0u32 } else if v >= 4294967296.0_f64 { u32::MAX } else { v as u32 };
+                self.stack.push(AwwasmValue::I32(result as i32));
+            }
+            4 => { // i64.trunc_sat_f32_s
+                let v = self.pop_f32()?;
+                let result = if v.is_nan() { 0i64 } else if v >= 9.223372036854776e18_f32 { i64::MAX } else if v < -9.223372036854776e18_f32 { i64::MIN } else { v as i64 };
+                self.stack.push(AwwasmValue::I64(result));
+            }
+            5 => { // i64.trunc_sat_f32_u
+                let v = self.pop_f32()?;
+                let result = if v.is_nan() || v <= -1.0_f32 { 0u64 } else if v >= 1.8446744073709552e19_f32 { u64::MAX } else { v as u64 };
+                self.stack.push(AwwasmValue::I64(result as i64));
+            }
+            6 => { // i64.trunc_sat_f64_s
+                let v = self.pop_f64()?;
+                let result = if v.is_nan() { 0i64 } else if v >= 9.223372036854776e18_f64 { i64::MAX } else if v < -9.223372036854776e18_f64 { i64::MIN } else { v as i64 };
+                self.stack.push(AwwasmValue::I64(result));
+            }
+            7 => { // i64.trunc_sat_f64_u
+                let v = self.pop_f64()?;
+                let result = if v.is_nan() || v <= -1.0_f64 { 0u64 } else if v >= 1.8446744073709552e19_f64 { u64::MAX } else { v as u64 };
+                self.stack.push(AwwasmValue::I64(result as i64));
+            }
+            other => return Err(AwwasmRuntimeError::InstructionParseError(format!("0xFC sub-op {other} not implemented"))),
+        }
+        dispatch_next!(self, source, frame_idx)
     }
 }
 

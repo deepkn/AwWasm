@@ -141,8 +141,9 @@ impl SpecRunner {
             WastDirective::AssertReturn { exec, results, span } => {
                 match exec {
                     WastExecute::Invoke(invoke) => {
-                        let actual = self.do_invoke(invoke)?;
                         let offset = span.offset();
+                        let actual = self.do_invoke(invoke)
+                            .map_err(|e| format!("offset {offset}: {e}"))?;
                         check_results(&actual, results, offset)?;
                         Ok(Outcome::Pass)
                     }
@@ -336,7 +337,7 @@ fn check_f32(actual: f32, pat: &NanPattern<Float32>) -> Result<(), String> {
             }
         }
         NanPattern::CanonicalNan => {
-            // Canonical NaN: quiet NaN with zero payload (0x7fc00000 or 0xffc00000).
+            // Canonical NaN: quiet bit set (bit 22), payload bits 21-0 all zero.
             if actual.is_nan() && (actual.to_bits() & 0x003fffff) == 0 {
                 Ok(())
             } else {
@@ -374,7 +375,8 @@ fn check_f64(actual: f64, pat: &NanPattern<Float64>) -> Result<(), String> {
             }
         }
         NanPattern::CanonicalNan => {
-            if actual.is_nan() && (actual.to_bits() & 0x000fffffffffffff) == 0 {
+            // Canonical NaN: quiet bit set (bit 51), payload bits 50-0 all zero.
+            if actual.is_nan() && (actual.to_bits() & 0x0007ffffffffffff) == 0 {
                 Ok(())
             } else {
                 Err(format!(

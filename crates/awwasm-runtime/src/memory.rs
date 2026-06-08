@@ -147,6 +147,32 @@ impl AwwasmMemInst {
         self.write(offset, &[value])
     }
 
+    /// Read a u16 from memory (little-endian).
+    #[inline]
+    pub fn read_u16(&self, offset: u32) -> Result<u16, AwwasmTrap> {
+        let bytes = self.read(offset, 2)?;
+        Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
+    }
+
+    /// Write a u16 to memory (little-endian).
+    #[inline]
+    pub fn write_u16(&mut self, offset: u32, value: u16) -> Result<(), AwwasmTrap> {
+        self.write(offset, &value.to_le_bytes())
+    }
+
+    /// Read a u32 from memory (little-endian).
+    #[inline]
+    pub fn read_u32(&self, offset: u32) -> Result<u32, AwwasmTrap> {
+        let bytes = self.read(offset, 4)?;
+        Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+    }
+
+    /// Write a u32 to memory (little-endian).
+    #[inline]
+    pub fn write_u32(&mut self, offset: u32, value: u32) -> Result<(), AwwasmTrap> {
+        self.write(offset, &value.to_le_bytes())
+    }
+
     /// Read an i32 from memory (little-endian).
     #[inline]
     pub fn read_i32(&self, offset: u32) -> Result<i32, AwwasmTrap> {
